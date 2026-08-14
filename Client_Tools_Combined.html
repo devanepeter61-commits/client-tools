@@ -166,6 +166,118 @@
     font-size:14px;
   }
 
+/* ==================== Meter Readings & Bills (Utilities) ==================== */
+
+  .page-utilities{
+    min-height:100vh;
+    background:#f2f3f6;
+    padding:0;
+    font-family:"Segoe UI", -apple-system, BlinkMacSystemFont, sans-serif;
+  }
+  .util-shell{
+    max-width:900px;
+    margin:0 auto;
+    padding:64px 24px 56px 24px;
+  }
+  .util-hero{
+    margin-bottom:30px;
+  }
+  .util-hero h1{
+    font-size:28px;
+    font-weight:700;
+    color:#1b2a52;
+    margin:0 0 6px 0;
+  }
+  .util-hero p{
+    font-size:14px;
+    color:#5a5f70;
+    margin:0 0 18px 0;
+  }
+  .util-duebar{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    background:#fff;
+    border:1px solid #e2e4ea;
+    border-radius:10px;
+    padding:12px 16px;
+    flex-wrap:wrap;
+  }
+  .util-duelabel{
+    font-weight:700;
+    color:#1b2a52;
+    font-size:13.5px;
+  }
+  .util-duedate{
+    font-size:13.5px;
+    color:#c4271b;
+    font-weight:600;
+  }
+  .util-dueedit{
+    margin-left:auto;
+    font-family:inherit;
+    font-size:12.5px;
+    font-weight:700;
+    padding:6px 14px;
+    border-radius:16px;
+    border:1px solid #c7cfe6;
+    background:#eef2ff;
+    color:#1b2a52;
+    cursor:pointer;
+  }
+  .util-dueedit:hover{background:#dde5fb;}
+
+  .util-unit{
+    background:#fff;
+    border:1px solid #e2e4ea;
+    border-radius:12px;
+    padding:20px 22px;
+    margin-bottom:16px;
+    box-shadow:0 2px 8px rgba(20,30,60,0.05);
+  }
+  .util-unit h2{
+    font-size:15px;
+    font-weight:700;
+    color:#1b2a52;
+    margin:0 0 14px 0;
+  }
+  .util-btnrow{
+    display:grid;
+    grid-template-columns:repeat(auto-fit, minmax(180px, 1fr));
+    gap:12px;
+  }
+  .util-btn{
+    display:flex;
+    flex-direction:column;
+    align-items:flex-start;
+    gap:2px;
+    text-decoration:none;
+    border-radius:10px;
+    padding:14px 16px;
+    border:1px solid transparent;
+    transition:transform .1s ease, box-shadow .1s ease;
+  }
+  .util-btn:hover{
+    transform:translateY(-1px);
+    box-shadow:0 4px 12px rgba(20,30,60,0.1);
+  }
+  .util-btn-icon{font-size:20px;}
+  .util-btn-label{
+    font-size:14.5px;
+    font-weight:700;
+  }
+  .util-btn-supplier{
+    font-size:12px;
+    opacity:0.85;
+  }
+  .util-gas{background:#fff1ec;border-color:#ffd2c0;color:#a8391b;}
+  .util-elec{background:#fff9e0;border-color:#ffe58f;color:#8a6d00;}
+  .util-water{background:#e8f6fb;border-color:#b9e6f4;color:#0b6a86;}
+  .util-water-note{
+    margin:12px 0 0 0;
+    font-size:12px;
+    color:#888;
+  }
 
 /* ==================== Who Needs a Statement ==================== */
 
@@ -1075,8 +1187,101 @@
         <div class="home-card-title">Staff Timesheet Manager</div>
         <div class="home-card-desc">TTP / Sunshine Windows staff timesheets, holidays, overtime, deductions and payroll report — synced to Supabase.</div>
       </button>
+      <button class="howto-btn" onclick="event.stopPropagation(); openGuide('staffmanager')" title="How To guide — Staff Timesheet Manager">?</button>
+    </div>
+    <div class="home-card-wrap">
+      <button class="home-card" onclick="switchPage('utilities')">
+        <div class="home-card-icon">🔌</div>
+        <div class="home-card-title">Meter Readings &amp; Bills</div>
+        <div class="home-card-desc">Quick links to submit gas, electric &amp; water meter readings and view/download bills for Units 3, 4 and 5&amp;6.</div>
+      </button>
+      <button class="howto-btn" onclick="event.stopPropagation(); openGuide('utilities')" title="How To guide — Meter Readings & Bills">?</button>
+    </div>
+    <div class="home-card-wrap">
+      <button class="home-card" onclick="switchPage('subinvoices')">
+        <div class="home-card-icon">🧾</div>
+        <div class="home-card-title">Subcontractor Invoices</div>
+        <div class="home-card-desc">Create CIS invoices for window fitters and other subcontractors — day rate or per-product — synced to Supabase.</div>
+      </button>
+      <button class="howto-btn" onclick="event.stopPropagation(); openGuide('subinvoices')" title="How To guide — Subcontractor Invoices">?</button>
     </div>
   </div>
+</div>
+</div>
+
+<div class="page page-utilities" id="page-utilities">
+<div class="util-shell">
+
+  <div class="util-hero">
+    <h1>Meter Readings &amp; Bills</h1>
+    <p>Submit gas, electric &amp; water meter readings and view/download bills — all supplier portals in one place.</p>
+    <div class="util-duebar">
+      <span class="util-duelabel">📅 Next reading due:</span>
+      <span class="util-duedate" id="utilDueDateDisplay">Not set</span>
+      <button class="util-dueedit" onclick="editUtilDueDate()">Edit</button>
+    </div>
+  </div>
+
+  <div class="util-unit">
+    <h2>Unit 3 — Tameside Trade Plastics</h2>
+    <div class="util-btnrow">
+      <a class="util-btn util-gas" href="https://smartweb.smartestenergy.com/Account/LogIn" target="_blank" rel="noopener">
+        <span class="util-btn-icon">🔥</span>
+        <span class="util-btn-label">Gas</span>
+        <span class="util-btn-supplier">Smartest Energy</span>
+      </a>
+      <a class="util-btn util-elec" href="https://www.eonnext.com/dashboard/accounts/select" target="_blank" rel="noopener">
+        <span class="util-btn-icon">⚡</span>
+        <span class="util-btn-label">Electric</span>
+        <span class="util-btn-supplier">Eon Next</span>
+      </a>
+    </div>
+  </div>
+
+  <div class="util-unit">
+    <h2>Unit 4 — Tameside Trade Plastics</h2>
+    <div class="util-btnrow">
+      <a class="util-btn util-gas" href="https://business.britishgas.co.uk/business/app/organisations" target="_blank" rel="noopener">
+        <span class="util-btn-icon">🔥</span>
+        <span class="util-btn-label">Gas</span>
+        <span class="util-btn-supplier">British Gas Lite</span>
+      </a>
+      <a class="util-btn util-elec" href="https://smartweb.smartestenergy.com/Account/LogIn" target="_blank" rel="noopener">
+        <span class="util-btn-icon">⚡</span>
+        <span class="util-btn-label">Electric</span>
+        <span class="util-btn-supplier">Smartest Energy</span>
+      </a>
+    </div>
+  </div>
+
+  <div class="util-unit">
+    <h2>Units 5 &amp; 6 — Sunshine Windows</h2>
+    <div class="util-btnrow">
+      <a class="util-btn util-gas" href="https://my.ygp.co.uk/clients/81778/" target="_blank" rel="noopener">
+        <span class="util-btn-icon">🔥</span>
+        <span class="util-btn-label">Gas</span>
+        <span class="util-btn-supplier">YGP</span>
+      </a>
+      <a class="util-btn util-elec" href="https://www.eonnext.com/dashboard/accounts/select" target="_blank" rel="noopener">
+        <span class="util-btn-icon">⚡</span>
+        <span class="util-btn-label">Electric</span>
+        <span class="util-btn-supplier">Eon Next</span>
+      </a>
+    </div>
+  </div>
+
+  <div class="util-unit">
+    <h2>Water — All Units</h2>
+    <div class="util-btnrow">
+      <a class="util-btn util-water" href="https://myaccount.water-plus.co.uk/home" target="_blank" rel="noopener">
+        <span class="util-btn-icon">💧</span>
+        <span class="util-btn-label">Water</span>
+        <span class="util-btn-supplier">Waterplus (all accounts)</span>
+      </a>
+    </div>
+    <p class="util-water-note">Accounts: Unit 3 — 6001837398 &nbsp;·&nbsp; Unit 4 — 6002031330 &nbsp;·&nbsp; Units 5&amp;6 — 6001071307 &amp; 6001071341</p>
+  </div>
+
 </div>
 </div>
 
@@ -1360,6 +1565,12 @@
 <div class="page page-iframehost" id="page-staffmanager">
   <div class="iframe-container" id="iframe-container-staffmanager">
     <div class="iframe-loading">Loading Staff Timesheet Manager…</div>
+  </div>
+</div>
+
+<div class="page page-iframehost" id="page-subinvoices">
+  <div class="iframe-container" id="iframe-container-subinvoices">
+    <div class="iframe-loading">Loading Subcontractor Invoices…</div>
   </div>
 </div>
 
@@ -11387,6 +11598,617 @@ function renderRptOvertime(body) {
 </body>
 </html>
 </script>
+<script type="text/plain" id="src-subinvoices"><!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Subcontractor Invoices</title>
+<style>
+  :root{
+    --blue:#1e3a5f; --blue-mid:#2c5282; --orange:#d97e2c; --orange-pale:#fdf1e6;
+    --bg:#f4f6f8; --card:#ffffff; --border:#e1e5ea; --text:#1f2937; --muted:#6b7280;
+    --danger:#c0392b; --green:#1e7a3d;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;background:var(--bg);color:var(--text);}
+  .app-header{background:var(--blue);color:#fff;padding:16px 24px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;}
+  .app-header h1{font-size:19px;margin:0;font-weight:600;}
+  .tab-bar{background:var(--blue-mid);display:flex;gap:4px;padding:0 20px;flex-wrap:wrap;}
+  .tab-btn{background:none;border:none;color:#dbe4f0;padding:12px 16px;cursor:pointer;font-size:14px;border-bottom:3px solid transparent;}
+  .tab-btn.active{color:#fff;border-bottom-color:var(--orange);font-weight:600;}
+  .page{display:none;max-width:1000px;margin:0 auto;padding:22px 18px 60px;}
+  .page.active{display:block;}
+  .card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:20px;margin-bottom:18px;}
+  .card h2{margin-top:0;font-size:16px;color:var(--blue);}
+  label{display:block;font-size:12.5px;color:var(--muted);margin:10px 0 4px;font-weight:600;}
+  input[type=text],input[type=number],input[type=date],select,textarea{
+    width:100%;padding:9px 10px;border:1px solid var(--border);border-radius:6px;font-size:14px;font-family:inherit;background:#fff;
+  }
+  textarea{resize:vertical;min-height:60px;}
+  .row{display:flex;gap:12px;flex-wrap:wrap;}
+  .row > div{flex:1;min-width:160px;}
+  .btn{display:inline-block;background:var(--blue);color:#fff;border:none;padding:10px 16px;border-radius:6px;font-size:14px;cursor:pointer;font-weight:600;}
+  .btn:hover{background:var(--blue-mid);}
+  .btn.orange{background:var(--orange);}
+  .btn.orange:hover{background:#c26f22;}
+  .btn.ghost{background:none;color:var(--blue);border:1px solid var(--border);}
+  .btn.danger{background:none;color:var(--danger);border:1px solid var(--danger);padding:6px 10px;font-size:12.5px;}
+  .btn.small{padding:6px 10px;font-size:12.5px;}
+  table{width:100%;border-collapse:collapse;font-size:13.5px;}
+  th,td{text-align:left;padding:9px 8px;border-bottom:1px solid var(--border);}
+  th{color:var(--muted);font-weight:600;font-size:12px;text-transform:uppercase;}
+  tr:hover td{background:#fafbfc;}
+  .pill{display:inline-block;padding:2px 9px;border-radius:20px;font-size:11.5px;font-weight:600;}
+  .pill.day{background:#e6f0fa;color:var(--blue-mid);}
+  .pill.product{background:var(--orange-pale);color:var(--orange);}
+  .toggle-group{display:flex;gap:8px;margin-top:6px;}
+  .toggle-btn{flex:1;padding:10px;border:1px solid var(--border);border-radius:6px;background:#fff;cursor:pointer;text-align:center;font-size:13.5px;font-weight:600;color:var(--muted);}
+  .toggle-btn.active{background:var(--blue);color:#fff;border-color:var(--blue);}
+  .line-item{display:flex;gap:8px;align-items:flex-end;margin-bottom:8px;}
+  .line-item .desc{flex:3;} .line-item .qty{flex:1;} .line-item .price{flex:1;} .line-item .amt{flex:1;}
+  .amt-display{padding:9px 10px;font-size:14px;font-weight:600;color:var(--text);}
+  .totals{margin-top:14px;border-top:1px solid var(--border);padding-top:14px;}
+  .totals-row{display:flex;justify-content:space-between;padding:5px 0;font-size:14px;}
+  .totals-row.total{font-weight:700;font-size:17px;color:var(--blue);border-top:1px solid var(--border);margin-top:6px;padding-top:10px;}
+  .modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:50;align-items:center;justify-content:center;padding:20px;}
+  .modal-bg.active{display:flex;}
+  .modal{background:#fff;border-radius:10px;padding:22px;max-width:520px;width:100%;max-height:90vh;overflow-y:auto;}
+  .modal h3{margin-top:0;color:var(--blue);}
+  .modal-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:16px;}
+  .empty{color:var(--muted);text-align:center;padding:30px 10px;font-size:14px;}
+  .msg{padding:10px 14px;border-radius:6px;font-size:13.5px;margin-bottom:14px;}
+  .msg.error{background:#fbe9e7;color:var(--danger);}
+  .msg.success{background:#e8f5e9;color:var(--green);}
+  .howto-btn{background:#fff;border:1px solid var(--border);border-radius:50%;width:26px;height:26px;cursor:pointer;font-weight:700;color:var(--blue);}
+  #printArea{display:none;}
+
+  /* ── Print / invoice PDF styling ── */
+  @media print{
+    body *{visibility:hidden;}
+    #printArea, #printArea *{visibility:visible;}
+    #printArea{display:block;position:absolute;top:0;left:0;width:100%;}
+  }
+  .inv-doc{background:#fff;padding:20mm;font-family:Helvetica,Arial,sans-serif;color:#111;max-width:190mm;margin:0 auto;}
+  .inv-doc h1{font-size:19px;letter-spacing:.5px;margin:0 0 10px;}
+  .inv-doc .addr-line{font-size:13px;line-height:1.5;}
+  .inv-doc .meta{margin-top:12px;font-size:13px;line-height:1.6;}
+  .inv-doc .to-block{margin-top:14px;font-size:13px;line-height:1.5;}
+  .inv-doc .to-block strong{display:block;margin-bottom:3px;}
+  .inv-doc table.inv-table{width:100%;border-collapse:collapse;margin-top:18px;font-size:13px;}
+  .inv-doc table.inv-table th{text-align:left;padding:6px 4px;border-bottom:1px solid #333;font-size:12.5px;}
+  .inv-doc table.inv-table td{padding:6px 4px;border-bottom:none;}
+  .inv-doc table.inv-table tr.rule td{border-top:1px solid #333;padding-top:8px;}
+  .inv-doc .total-due{font-weight:700;font-size:15px;}
+  .inv-doc .pay-block{margin-top:22px;font-size:13px;line-height:1.6;}
+  .inv-doc .pay-block strong{display:block;margin-bottom:3px;}
+  .num-col{text-align:right;}
+</style>
+</head>
+<body>
+
+<div class="app-header">
+  <h1>🧾 Subcontractor Invoices</h1>
+  <div style="font-size:12.5px;color:#cfe0f5;">Sunshine Windows / TTP — CIS payments</div>
+</div>
+
+<div class="tab-bar">
+  <button class="tab-btn active" onclick="showPage('subs')">Subcontractors</button>
+  <button class="tab-btn" onclick="showPage('newInvoice')">New Invoice</button>
+  <button class="tab-btn" onclick="showPage('history')">Invoice History</button>
+</div>
+
+<!-- ============ SUBCONTRACTORS PAGE ============ -->
+<div class="page active" id="page-subs">
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center;">
+      <h2 style="margin:0;">Subcontractor List</h2>
+      <button class="btn orange" onclick="openSubModal()">+ Add Subcontractor</button>
+    </div>
+    <div id="subsMsg"></div>
+    <table id="subsTable" style="margin-top:14px;">
+      <thead><tr><th>Name</th><th>UTR</th><th>Default Rate</th><th>Bank</th><th></th></tr></thead>
+      <tbody id="subsTbody"></tbody>
+    </table>
+    <div id="subsEmpty" class="empty" style="display:none;">No subcontractors saved yet — add one to get started.</div>
+  </div>
+</div>
+
+<!-- ============ NEW INVOICE PAGE ============ -->
+<div class="page" id="page-newInvoice">
+  <div class="card">
+    <h2>New Invoice</h2>
+    <div id="invMsg"></div>
+    <div class="row">
+      <div>
+        <label>Subcontractor</label>
+        <select id="invSub" onchange="onSubSelect()"><option value="">Select…</option></select>
+      </div>
+      <div>
+        <label>Invoice Date</label>
+        <input type="date" id="invDate">
+      </div>
+      <div>
+        <label>Invoice No.</label>
+        <input type="text" id="invNumber" placeholder="SC165">
+      </div>
+    </div>
+
+    <label>Rate Type</label>
+    <div class="toggle-group">
+      <button type="button" class="toggle-btn active" id="rtDayBtn" onclick="setRateType('day')">Day Rate</button>
+      <button type="button" class="toggle-btn" id="rtProductBtn" onclick="setRateType('product')">Per Product</button>
+    </div>
+
+    <!-- Day rate fields -->
+    <div id="dayFields">
+      <div class="row">
+        <div><label>Days Worked</label><input type="number" id="dayDays" step="0.5" min="0" oninput="recalc()"></div>
+        <div><label>Rate per Day (£)</label><input type="number" id="dayRate" step="0.01" min="0" oninput="recalc()"></div>
+        <div><label>Line Amount</label><div class="amt-display" id="dayAmountDisplay">£0.00</div></div>
+      </div>
+    </div>
+
+    <!-- Product fields -->
+    <div id="productFields" style="display:none;">
+      <label style="margin-top:16px;">Line Items</label>
+      <div id="lineItems"></div>
+      <button type="button" class="btn ghost small" onclick="addLineItem()">+ Add Line</button>
+    </div>
+
+    <div class="totals">
+      <div class="totals-row"><span>Subtotal</span><span id="totSubtotal">£0.00</span></div>
+      <div class="totals-row"><span>Less CIS (20%)</span><span id="totCis">-£0.00</span></div>
+      <div class="totals-row total"><span>TOTAL DUE</span><span id="totDue">£0.00</span></div>
+    </div>
+
+    <div style="margin-top:18px;display:flex;gap:10px;flex-wrap:wrap;">
+      <button class="btn orange" onclick="saveInvoice()">💾 Save & Generate PDF</button>
+      <button class="btn ghost" onclick="previewInvoice()">👁 Preview</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ HISTORY PAGE ============ -->
+<div class="page" id="page-history">
+  <div class="card">
+    <h2>Invoice History</h2>
+    <div class="row" style="align-items:flex-end;">
+      <div><label>Filter by Subcontractor</label>
+        <select id="histFilter" onchange="loadHistory()"><option value="">All</option></select>
+      </div>
+    </div>
+    <table style="margin-top:14px;">
+      <thead><tr><th>Invoice No.</th><th>Date</th><th>Subcontractor</th><th>Type</th><th class="num-col">Total Due</th><th></th></tr></thead>
+      <tbody id="histTbody"></tbody>
+    </table>
+    <div id="histEmpty" class="empty" style="display:none;">No invoices saved yet.</div>
+  </div>
+</div>
+
+<!-- ============ SUBCONTRACTOR MODAL ============ -->
+<div class="modal-bg" id="subModalBg">
+  <div class="modal">
+    <h3 id="subModalTitle">Add Subcontractor</h3>
+    <input type="hidden" id="subId">
+    <label>Full Name</label>
+    <input type="text" id="subName">
+    <label>Address (one line per row)</label>
+    <textarea id="subAddress" placeholder="19 Wells Court&#10;Dukinfield&#10;SK16 5RY"></textarea>
+    <label>Email</label>
+    <input type="text" id="subEmail">
+    <div class="row">
+      <div><label>Sub Contractor UTR</label><input type="text" id="subUtr"></div>
+      <div><label>National Insurance No.</label><input type="text" id="subNi"></div>
+    </div>
+    <div class="row">
+      <div><label>Sort Code</label><input type="text" id="subSort" placeholder="11-03-97"></div>
+      <div><label>Account No.</label><input type="text" id="subAcc"></div>
+    </div>
+    <label>Bank Name (optional)</label>
+    <input type="text" id="subBank" placeholder="e.g. Halifax Bank">
+    <label>Default Rate Type</label>
+    <select id="subDefaultType"><option value="day">Day Rate</option><option value="product">Per Product</option></select>
+    <label>Default Day Rate (£, optional)</label>
+    <input type="number" id="subDefaultRate" step="0.01" min="0">
+    <div class="modal-actions">
+      <button class="btn danger" id="subDeleteBtn" style="display:none;" onclick="deleteSub()">Delete</button>
+      <button class="btn ghost" onclick="closeSubModal()">Cancel</button>
+      <button class="btn orange" onclick="saveSub()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Hidden printable invoice -->
+<div id="printArea"></div>
+
+<script>
+// ════════════════════════════════════════
+// SUPABASE CONFIG — same project as Client_Tools_Combined.html
+// ════════════════════════════════════════
+const SUPA_URL = 'https://xwkmwazkmovnonbocpom.supabase.co';
+const SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inh3a213YXprbW92bm9uYm9jcG9tIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU3NTEyMTEsImV4cCI6MjEwMTMyNzIxMX0.BwNA2r1uIhDLlsVQHzN6RZ0HEXxdvvCI_g16P5R7Hwg';
+
+function supaHeaders(){
+  return { 'Content-Type':'application/json', 'apikey':SUPA_KEY, 'Authorization':'Bearer '+SUPA_KEY, 'Prefer':'return=representation' };
+}
+async function supaGet(table, params){
+  const url = new URL(SUPA_URL + '/rest/v1/' + table);
+  if (params) Object.entries(params).forEach(([k,v]) => url.searchParams.set(k,v));
+  const r = await fetch(url.toString(), { headers: supaHeaders() });
+  if (!r.ok) throw new Error(await r.text());
+  return r.json();
+}
+async function supaInsert(table, data){
+  const r = await fetch(SUPA_URL + '/rest/v1/' + table, { method:'POST', headers: supaHeaders(), body: JSON.stringify(data) });
+  if (!r.ok) throw new Error(await r.text());
+  return r.json();
+}
+async function supaUpdate(table, id, data){
+  const r = await fetch(SUPA_URL + '/rest/v1/' + table + '?id=eq.' + id, { method:'PATCH', headers: supaHeaders(), body: JSON.stringify(data) });
+  if (!r.ok) throw new Error(await r.text());
+  return r.json();
+}
+async function supaDelete(table, id){
+  const r = await fetch(SUPA_URL + '/rest/v1/' + table + '?id=eq.' + id, { method:'DELETE', headers: supaHeaders() });
+  if (!r.ok) throw new Error(await r.text());
+  return true;
+}
+
+const COMPANY = {
+  name: 'Sunshine Windows',
+  address: ['Unit 5-6 Ravensfield Industrial Estate', 'Charles Street', 'Dukinfield', 'SK16 4SD']
+};
+
+let subcontractors = [];
+let lineItemCount = 0;
+
+// ── Navigation ──
+function showPage(name){
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('page-' + name).classList.add('active');
+  event.target.classList.add('active');
+  if (name === 'newInvoice') { populateSubDropdown(); if(!document.getElementById('invDate').value) document.getElementById('invDate').valueAsDate = new Date(); suggestNextInvoiceNumber(); }
+  if (name === 'history') loadHistory();
+}
+
+// ── Load subcontractors ──
+async function loadSubs(){
+  try{
+    subcontractors = await supaGet('subcontractors', { order: 'name.asc' });
+    renderSubsTable();
+    populateSubDropdown();
+    populateHistFilter();
+  }catch(e){
+    document.getElementById('subsMsg').innerHTML = `<div class="msg error">Couldn't load subcontractors — ${e.message}. Check the subcontractors table exists in Supabase.</div>`;
+  }
+}
+
+function renderSubsTable(){
+  const tbody = document.getElementById('subsTbody');
+  tbody.innerHTML = '';
+  document.getElementById('subsEmpty').style.display = subcontractors.length ? 'none' : 'block';
+  subcontractors.forEach(s => {
+    const tr = document.createElement('tr');
+    const rateLabel = s.default_rate_type === 'product' ? '<span class="pill product">Per Product</span>' :
+      `<span class="pill day">Day Rate${s.default_day_rate ? ' — £'+Number(s.default_day_rate).toFixed(2) : ''}</span>`;
+    tr.innerHTML = `<td>${esc(s.name)}</td><td>${esc(s.utr||'')}</td><td>${rateLabel}</td><td>${esc(s.bank_name||'')}</td>
+      <td><button class="btn ghost small" onclick="openSubModal('${s.id}')">Edit</button></td>`;
+    tbody.appendChild(tr);
+  });
+}
+
+function populateSubDropdown(){
+  const sel = document.getElementById('invSub');
+  const current = sel.value;
+  sel.innerHTML = '<option value="">Select…</option>' + subcontractors.map(s => `<option value="${s.id}">${esc(s.name)}</option>`).join('');
+  sel.value = current;
+}
+function populateHistFilter(){
+  const sel = document.getElementById('histFilter');
+  const current = sel.value;
+  sel.innerHTML = '<option value="">All</option>' + subcontractors.map(s => `<option value="${s.id}">${esc(s.name)}</option>`).join('');
+  sel.value = current;
+}
+
+// ── Subcontractor modal ──
+function openSubModal(id){
+  document.getElementById('subId').value = id || '';
+  document.getElementById('subDeleteBtn').style.display = id ? 'inline-block' : 'none';
+  if (id){
+    const s = subcontractors.find(x => x.id === id);
+    document.getElementById('subModalTitle').textContent = 'Edit Subcontractor';
+    document.getElementById('subName').value = s.name || '';
+    document.getElementById('subAddress').value = s.address || '';
+    document.getElementById('subEmail').value = s.email || '';
+    document.getElementById('subUtr').value = s.utr || '';
+    document.getElementById('subNi').value = s.ni_number || '';
+    document.getElementById('subSort').value = s.sort_code || '';
+    document.getElementById('subAcc').value = s.account_number || '';
+    document.getElementById('subBank').value = s.bank_name || '';
+    document.getElementById('subDefaultType').value = s.default_rate_type || 'day';
+    document.getElementById('subDefaultRate').value = s.default_day_rate || '';
+  } else {
+    document.getElementById('subModalTitle').textContent = 'Add Subcontractor';
+    ['subName','subAddress','subEmail','subUtr','subNi','subSort','subAcc','subBank','subDefaultRate'].forEach(f => document.getElementById(f).value = '');
+    document.getElementById('subDefaultType').value = 'day';
+  }
+  document.getElementById('subModalBg').classList.add('active');
+}
+function closeSubModal(){ document.getElementById('subModalBg').classList.remove('active'); }
+
+async function saveSub(){
+  const id = document.getElementById('subId').value;
+  const data = {
+    name: document.getElementById('subName').value.trim(),
+    address: document.getElementById('subAddress').value.trim(),
+    email: document.getElementById('subEmail').value.trim(),
+    utr: document.getElementById('subUtr').value.trim(),
+    ni_number: document.getElementById('subNi').value.trim(),
+    sort_code: document.getElementById('subSort').value.trim(),
+    account_number: document.getElementById('subAcc').value.trim(),
+    bank_name: document.getElementById('subBank').value.trim(),
+    default_rate_type: document.getElementById('subDefaultType').value,
+    default_day_rate: document.getElementById('subDefaultRate').value ? Number(document.getElementById('subDefaultRate').value) : null
+  };
+  if (!data.name){ alert('Name is required.'); return; }
+  try{
+    if (id) await supaUpdate('subcontractors', id, data);
+    else await supaInsert('subcontractors', data);
+    closeSubModal();
+    await loadSubs();
+    document.getElementById('subsMsg').innerHTML = `<div class="msg success">Saved.</div>`;
+    setTimeout(() => document.getElementById('subsMsg').innerHTML = '', 2500);
+  }catch(e){
+    alert('Error saving: ' + e.message);
+  }
+}
+async function deleteSub(){
+  const id = document.getElementById('subId').value;
+  if (!confirm('Delete this subcontractor? Their past invoices will stay in history.')) return;
+  try{
+    await supaDelete('subcontractors', id);
+    closeSubModal();
+    await loadSubs();
+  }catch(e){ alert('Error deleting: ' + e.message); }
+}
+
+// ── New invoice logic ──
+let currentRateType = 'day';
+function setRateType(type){
+  currentRateType = type;
+  document.getElementById('rtDayBtn').classList.toggle('active', type === 'day');
+  document.getElementById('rtProductBtn').classList.toggle('active', type === 'product');
+  document.getElementById('dayFields').style.display = type === 'day' ? 'block' : 'none';
+  document.getElementById('productFields').style.display = type === 'product' ? 'block' : 'none';
+  recalc();
+}
+
+function onSubSelect(){
+  const id = document.getElementById('invSub').value;
+  const s = subcontractors.find(x => x.id === id);
+  if (!s) return;
+  setRateType(s.default_rate_type || 'day');
+  if (s.default_day_rate) document.getElementById('dayRate').value = s.default_day_rate;
+  recalc();
+}
+
+function addLineItem(desc, qty, price){
+  lineItemCount++;
+  const rowId = 'li' + lineItemCount;
+  const div = document.createElement('div');
+  div.className = 'line-item';
+  div.id = rowId;
+  div.innerHTML = `
+    <div class="desc"><label>Description</label><input type="text" placeholder="e.g. Window" value="${desc ? esc(desc) : ''}" oninput="recalc()"></div>
+    <div class="qty"><label>Qty</label><input type="number" min="0" step="1" value="${qty || ''}" oninput="recalc()"></div>
+    <div class="price"><label>Price (£)</label><input type="number" min="0" step="0.01" value="${price || ''}" oninput="recalc()"></div>
+    <div class="amt"><label>Amount</label><div class="amt-display" id="${rowId}-amt">£0.00</div></div>
+    <button type="button" class="btn danger small" onclick="document.getElementById('${rowId}').remove(); recalc();">✕</button>
+  `;
+  document.getElementById('lineItems').appendChild(div);
+  recalc();
+}
+
+function getLineItems(){
+  return Array.from(document.querySelectorAll('#lineItems .line-item')).map(row => {
+    const inputs = row.querySelectorAll('input');
+    return { description: inputs[0].value.trim(), qty: Number(inputs[1].value) || 0, price: Number(inputs[2].value) || 0 };
+  });
+}
+
+function recalc(){
+  let subtotal = 0;
+  if (currentRateType === 'day'){
+    const days = Number(document.getElementById('dayDays').value) || 0;
+    const rate = Number(document.getElementById('dayRate').value) || 0;
+    subtotal = days * rate;
+    document.getElementById('dayAmountDisplay').textContent = fmt(subtotal);
+  } else {
+    document.querySelectorAll('#lineItems .line-item').forEach(row => {
+      const inputs = row.querySelectorAll('input');
+      const amt = (Number(inputs[1].value)||0) * (Number(inputs[2].value)||0);
+      row.querySelector('.amt-display').textContent = fmt(amt);
+      subtotal += amt;
+    });
+  }
+  const cis = subtotal * 0.2;
+  const total = subtotal - cis;
+  document.getElementById('totSubtotal').textContent = fmt(subtotal);
+  document.getElementById('totCis').textContent = '-' + fmt(cis);
+  document.getElementById('totDue').textContent = fmt(total);
+  return { subtotal, cis, total };
+}
+
+async function suggestNextInvoiceNumber(){
+  try{
+    const rows = await supaGet('subcontractor_invoices', { select: 'invoice_number', order: 'created_at.desc', limit: '1' });
+    if (rows.length){
+      const m = rows[0].invoice_number.match(/^([A-Za-z]*)(\d+)$/);
+      if (m){
+        const next = String(Number(m[2]) + 1).padStart(m[2].length, '0');
+        document.getElementById('invNumber').value = m[1] + next;
+        return;
+      }
+    }
+    document.getElementById('invNumber').value = 'SC001';
+  }catch(e){ /* silent — user can type manually */ }
+}
+
+function buildInvoiceHTML(sub, meta, totals){
+  const addrLines = (sub.address || '').split('\n').filter(Boolean);
+  let itemsRows = '';
+  if (meta.rate_type === 'day'){
+    itemsRows = `<tr><td>Day rate work</td><td class="num-col">${meta.days}</td><td class="num-col">£${meta.day_rate.toFixed(2)} / day</td><td class="num-col">£${totals.subtotal.toFixed(2)}</td></tr>`;
+  } else {
+    itemsRows = meta.line_items.map(li => `<tr><td>${esc(li.description)}</td><td class="num-col">${li.qty}</td><td class="num-col">£${li.price.toFixed(2)}</td><td class="num-col">£${(li.qty*li.price).toFixed(2)}</td></tr>`).join('');
+  }
+  return `
+  <div class="inv-doc">
+    <h1>${esc(sub.name.toUpperCase())}</h1>
+    <div class="addr-line">
+      ${addrLines.map(l => esc(l)).join('<br>')}
+      ${sub.email ? '<br>'+esc(sub.email) : ''}
+    </div>
+    <div class="meta">
+      Sub Contractor UTR: ${esc(sub.utr||'')}<br>
+      Nat. Insurance No: ${esc(sub.ni_number||'')}<br><br>
+      Invoice Date: ${meta.dateDisplay}<br>
+      Invoice No: ${esc(meta.invoice_number)}<br>
+      Job: Various Jobs @ ${meta.rate_type === 'day' ? 'Day Rate' : 'Per Product'}
+    </div>
+    <div class="to-block">
+      <strong>To:</strong>
+      ${COMPANY.name}<br>${COMPANY.address.join('<br>')}
+    </div>
+    <table class="inv-table">
+      <thead><tr><th>Description</th><th class="num-col">${meta.rate_type==='day'?'Days':'Qty'}</th><th class="num-col">${meta.rate_type==='day'?'Rate':'Price'}</th><th class="num-col">Amount</th></tr></thead>
+      <tbody>
+        ${itemsRows}
+        <tr><td>Less CIS (20%)</td><td></td><td></td><td class="num-col">-£${totals.cis.toFixed(2)}</td></tr>
+        <tr class="rule"><td class="total-due">TOTAL DUE</td><td></td><td></td><td class="num-col total-due">£${totals.total.toFixed(2)}</td></tr>
+      </tbody>
+    </table>
+    <div class="pay-block">
+      <strong>Payments to:</strong>
+      ${esc(sub.name)}<br>
+      Sort Code: ${esc(sub.sort_code||'')}<br>
+      Account No: ${esc(sub.account_number||'')}
+      ${sub.bank_name ? '<br>'+esc(sub.bank_name) : ''}
+    </div>
+  </div>`;
+}
+
+function gatherInvoiceData(){
+  const subId = document.getElementById('invSub').value;
+  const sub = subcontractors.find(x => x.id === subId);
+  if (!sub){ alert('Please select a subcontractor.'); return null; }
+  const invoice_number = document.getElementById('invNumber').value.trim();
+  const dateVal = document.getElementById('invDate').value;
+  if (!invoice_number || !dateVal){ alert('Please set an invoice date and number.'); return null; }
+  const totals = recalc();
+  if (totals.subtotal <= 0){ alert('Add days/rate or line items before saving.'); return null; }
+
+  const [y,m,d] = dateVal.split('-');
+  const dateDisplay = `${d}.${m}.${y.slice(2)}`;
+
+  const meta = { invoice_number, dateDisplay, rate_type: currentRateType };
+  if (currentRateType === 'day'){
+    meta.days = Number(document.getElementById('dayDays').value) || 0;
+    meta.day_rate = Number(document.getElementById('dayRate').value) || 0;
+    meta.line_items = null;
+  } else {
+    meta.days = null; meta.day_rate = null;
+    meta.line_items = getLineItems().filter(li => li.description && li.qty);
+  }
+  return { sub, meta, totals, dateVal };
+}
+
+function previewInvoice(){
+  const g = gatherInvoiceData();
+  if (!g) return;
+  const html = buildInvoiceHTML(g.sub, g.meta, g.totals);
+  const w = window.open('', '_blank');
+  w.document.write(`<html><head><title>Preview — ${g.meta.invoice_number}</title></head><body>${html}</body></html>`);
+}
+
+async function saveInvoice(){
+  const g = gatherInvoiceData();
+  if (!g) return;
+  const record = {
+    subcontractor_id: g.sub.id,
+    invoice_number: g.meta.invoice_number,
+    invoice_date: g.dateVal,
+    rate_type: g.meta.rate_type,
+    days: g.meta.days,
+    day_rate: g.meta.day_rate,
+    line_items: g.meta.line_items,
+    subtotal: g.totals.subtotal,
+    cis_amount: g.totals.cis,
+    total_due: g.totals.total
+  };
+  try{
+    await supaInsert('subcontractor_invoices', record);
+    document.getElementById('invMsg').innerHTML = `<div class="msg success">Saved. Opening printable invoice…</div>`;
+    printInvoice(g.sub, g.meta, g.totals);
+    setTimeout(() => document.getElementById('invMsg').innerHTML = '', 3000);
+  }catch(e){
+    document.getElementById('invMsg').innerHTML = `<div class="msg error">Couldn't save — ${e.message}. Check the subcontractor_invoices table exists in Supabase.</div>`;
+  }
+}
+
+function printInvoice(sub, meta, totals){
+  document.getElementById('printArea').innerHTML = buildInvoiceHTML(sub, meta, totals);
+  window.print();
+}
+
+// ── History ──
+async function loadHistory(){
+  const filterId = document.getElementById('histFilter').value;
+  try{
+    const params = { order: 'created_at.desc' };
+    if (filterId) params.subcontractor_id = 'eq.' + filterId;
+    const rows = await supaGet('subcontractor_invoices', params);
+    const tbody = document.getElementById('histTbody');
+    tbody.innerHTML = '';
+    document.getElementById('histEmpty').style.display = rows.length ? 'none' : 'block';
+    rows.forEach(r => {
+      const sub = subcontractors.find(s => s.id === r.subcontractor_id);
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td>${esc(r.invoice_number)}</td><td>${r.invoice_date}</td><td>${sub ? esc(sub.name) : '—'}</td>
+        <td>${r.rate_type === 'day' ? '<span class="pill day">Day Rate</span>' : '<span class="pill product">Per Product</span>'}</td>
+        <td class="num-col">£${Number(r.total_due).toFixed(2)}</td>
+        <td><button class="btn ghost small" onclick='reprint(${JSON.stringify(r).replace(/'/g,"&apos;")})'>Reprint</button></td>`;
+      tbody.appendChild(tr);
+    });
+  }catch(e){
+    document.getElementById('histEmpty').style.display = 'block';
+    document.getElementById('histEmpty').textContent = "Couldn't load history — " + e.message;
+  }
+}
+
+function reprint(r){
+  const sub = subcontractors.find(s => s.id === r.subcontractor_id);
+  if (!sub){ alert('Subcontractor record not found.'); return; }
+  const [y,m,d] = r.invoice_date.split('-');
+  const meta = { invoice_number: r.invoice_number, dateDisplay: `${d}.${m}.${y.slice(2)}`, rate_type: r.rate_type, days: r.days, day_rate: r.day_rate, line_items: r.line_items };
+  const totals = { subtotal: Number(r.subtotal), cis: Number(r.cis_amount), total: Number(r.total_due) };
+  printInvoice(sub, meta, totals);
+}
+
+// ── Helpers ──
+function fmt(n){ return '£' + n.toFixed(2); }
+function esc(s){ return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+// Start with one blank line item for product mode
+addLineItem();
+loadSubs();
+<\/script>
+</body>
+</html>
+</script>
+
 
 <script type="text/plain" id="guide-pettycash">JVBERi0xLjQKJZOMi54gUmVwb3J0TGFiIEdlbmVyYXRlZCBQREYgZG9jdW1lbnQgKG9wZW5zb3VyY2UpCjEgMCBvYmoKPDwKL0YxIDIgMCBSIC9GMiAzIDAgUiAvRjMgNSAwIFIKPj4KZW5kb2JqCjIgMCBvYmoKPDwKL0Jhc2VGb250IC9IZWx2ZXRpY2EgL0VuY29kaW5nIC9XaW5BbnNpRW5jb2RpbmcgL05hbWUgL0YxIC9TdWJ0eXBlIC9UeXBlMSAvVHlwZSAvRm9udAo+PgplbmRvYmoKMyAwIG9iago8PAovQmFzZUZvbnQgL0hlbHZldGljYS1Cb2xkIC9FbmNvZGluZyAvV2luQW5zaUVuY29kaW5nIC9OYW1lIC9GMiAvU3VidHlwZSAvVHlwZTEgL1R5cGUgL0ZvbnQKPj4KZW5kb2JqCjQgMCBvYmoKPDwKL0NvbnRlbnRzIDEwIDAgUiAvTWVkaWFCb3ggWyAwIDAgNTk1LjI3NTYgODQxLjg4OTggXSAvUGFyZW50IDkgMCBSIC9SZXNvdXJjZXMgPDwKL0ZvbnQgMSAwIFIgL1Byb2NTZXQgWyAvUERGIC9UZXh0IC9JbWFnZUIgL0ltYWdlQyAvSW1hZ2VJIF0KPj4gL1JvdGF0ZSAwIC9UcmFucyA8PAoKPj4gCiAgL1R5cGUgL1BhZ2UKPj4KZW5kb2JqCjUgMCBvYmoKPDwKL0Jhc2VGb250IC9IZWx2ZXRpY2EtT2JsaXF1ZSAvRW5jb2RpbmcgL1dpbkFuc2lFbmNvZGluZyAvTmFtZSAvRjMgL1N1YnR5cGUgL1R5cGUxIC9UeXBlIC9Gb250Cj4+CmVuZG9iago2IDAgb2JqCjw8Ci9Db250ZW50cyAxMSAwIFIgL01lZGlhQm94IFsgMCAwIDU5NS4yNzU2IDg0MS44ODk4IF0gL1BhcmVudCA5IDAgUiAvUmVzb3VyY2VzIDw8Ci9Gb250IDEgMCBSIC9Qcm9jU2V0IFsgL1BERiAvVGV4dCAvSW1hZ2VCIC9JbWFnZUMgL0ltYWdlSSBdCj4+IC9Sb3RhdGUgMCAvVHJhbnMgPDwKCj4+IAogIC9UeXBlIC9QYWdlCj4+CmVuZG9iago3IDAgb2JqCjw8Ci9QYWdlTW9kZSAvVXNlTm9uZSAvUGFnZXMgOSAwIFIgL1R5cGUgL0NhdGFsb2cKPj4KZW5kb2JqCjggMCBvYmoKPDwKL0F1dGhvciAoQ2xpZW50IFRvb2xzKSAvQ3JlYXRpb25EYXRlIChEOjIwMjYwODA2MTEwMzM1KzAwJzAwJykgL0NyZWF0b3IgKFwodW5zcGVjaWZpZWRcKSkgL0tleXdvcmRzICgpIC9Nb2REYXRlIChEOjIwMjYwODA2MTEwMzM1KzAwJzAwJykgL1Byb2R1Y2VyIChSZXBvcnRMYWIgUERGIExpYnJhcnkgLSBcKG9wZW5zb3VyY2VcKSkgCiAgL1N1YmplY3QgKFwodW5zcGVjaWZpZWRcKSkgL1RpdGxlIChQZXR0eSBDYXNoIFRyYWNrZXIgXDIwNCBIb3cgVG8pIC9UcmFwcGVkIC9GYWxzZQo+PgplbmRvYmoKOSAwIG9iago8PAovQ291bnQgMiAvS2lkcyBbIDQgMCBSIDYgMCBSIF0gL1R5cGUgL1BhZ2VzCj4+CmVuZG9iagoxMCAwIG9iago8PAovRmlsdGVyIFsgL0FTQ0lJODVEZWNvZGUgL0ZsYXRlRGVjb2RlIF0gL0xlbmd0aCAyNDAwCj4+CnN0cmVhbQpHYXUwRTlsbyZJJkFAc0JtLFV0bipDVjxTOkpYY2NtQS0uaUMsXTFeKmRpTjBMaCcwXCRpakpeXltFZD84XnBmajlCZ11AUTcqIkhtKFY8TUczc3A7NUpJKDpqb0UvV2lTb0ojSUs4Q1dwcTlFNWBqXW5DNTVUP149Ij1OTjozUjZQMEg6S19yb04mTl5QOEEoSS4pKzpvcTpAPnFZMUV0Tl5jPUQlazljXC9jRE4yRzxVdCwxX0c4cVszYnIxZCg2Z2VGUyJaNGBjbFg5JitDRD02aG9eMClucSNlP1UlaVJdUzVtIikjbTRrcF47UnBTPkdCakYtYzdiL0grOiptXlkmblw3LkxNWiF1Wio9LGxuWVFjSWJJIzBvRURnTjJla3A+Okt0N0BcP29WJUVELzEpWV83NjpgSTJBUFM6YSFLWEBlZTQvUyo2LERcRChJZ1gnIlhZRUFsaWxiSD1PTHFlKUkwRVNSbmVPTCdPNT1TKE8nV1kxLyo0NFIkS2pdSStuajJBPnQrZDJgJl9fTjV0WzljXEdFXixTXzw1Vic7J1klQzpePCVZRjsuN2lmK1ksTjkjL2F1L1F0JmpEKSgna2g+cmEhPTlDRUMtOWAvcWxtTm9NUnJ1Il1yb2U/cjNlJChjSzQyOlhVY3IsQ3BgTW45P2BtMzB0cXEvPF81L2BlPicpaUNcOV5LLzteNSZZKVVHI25GXktMQmgtQy1Ec25yRClVOVVSR1g/OlQpSHNzJk0tJUpyZ0pQa3JoRWtKcnVeUEdvT24+XldZTlxNM3JtX2BPXSQ4KShAQlo+MmQ1NmVfNWg0LD8hOGpSRDNjOl1WYyRBZzEkWFhPNEZRP2gpdDs3NyIuS0g6L1pCbyI/dGkkVCV1PVMzUktKMGgjNnI2LFVVTiUnNTdoX1sqc0QtP0VTQDtGalFfPkdpdTk9MSgrLDt1QWEkJ0FBcm07L2MqKXJoOm8zbGxbWENEJllbIUxSISJcYVhfXXE9b29yTyhfJTUrWSJwcCRsVV4lNDpWKFxFOltOK109XGdqTCkpZnQyLTJtUmxVRidEIWcuWG8qYy4uWykoLTwkcl9rPDJeQDpScnNUPClFcCZpQiUrXTk8aSxcKWk8UEczZEchQWxsUy5RO0UhSWtFKVBaamFOTW5QYGAlWGM/TzgrcylSQlwuK0hQXys2JTZWS1xjbEwzXzFsWS1aVTo6Um87JmlIbFdjLEh1Y1ZaYTIzJnEqR14kXyI6bi05XjVdZD1URyR1RV9wKyJebD5sMUc3b2Y+P0dxZ0QtQ1U7NyxUWSVaRF8xbTAyL2U6UWElcjMrU0NoV1hbcTQvVC9xbT5ARV9bVFpocUxaU3BtTyNQZ1NYUiMmO3I1LkIySUhYOGhjMlFaNjZZVkNVZF1bMkg5XiNaJHJuNkRqP2ApLydKLF07SyNCbFdHdGBOPGBbQkE/ZixXaW5KaWlcT00vWDhEQVRcI2pcOjEuYDpUWTxsMUlxRGVsczYvSGg2P3FLWF42NnAsQ1VhLyEmOjJQUzY7Wl4pKDRZMUVUKS8zNChtLEhtYyhwVVlSIis4NiFXPTdJUC5bZTMpX3IjRWFBL0ZnPHEnOlQmQ1w7K1ZUUWNWT2hwI2I/Nz4wc1M/JD5QMlF1UGtRMF4rMmRSQXQpZC0uPU43U0phWDcsNiJqP1k7aVM+Zic8TjhlYD0wQSJiQW5GSDJqOU1lPi1bN1dlU2E/PmUnPilmOVohci9ga0giYTZpPTk+cW5jKnJeV0ErKnJROz1XUzZpUStUZ0E6XWkianJBVlJYbGZbMCZrOl82XzlkQ3RfdUs9S3RcMjguSmkuKGJoZTcqVmc1LEQnO2BmL0J0UEtPXS10YzIhNi8kRVNJLFc9RzM1TTg+X0RcaUdaKGJAQDphKiRkWjNxayZjLiNPW3VSZzlFQ01OLj9vNmleJFssUj9YXlRvZi82ZS5OYC05VDRDVlgmX19wcVVpcDwjO04zaDlaYGFTUmxJWjQnXE5BSHUkKjxARGxPSlpRPGJZVk4wXV1sNW5gUS5fV25xU09rPmhhUm04LUlzcGQxITBsRD5VPTk/Mz5oLUk0R2xBZjgjXkNtZDlLKTUzWyNDYj4ySycpUSRqZzVgLE0mTjlkaiokdEI1JmdOO1dPWV1aOjBnP2RBQ1lJb11MQTl1RD4nRVFtYm5AJTRnUjpvWVdaNV1ITG90cXE7RTUkTWlKPFBxLUN1akUtNSZSRCMsbXNvV1NcVFQmQitrRldSOys2KUhVWVYjMEUxV2FrUzRTUnBJY08iXUIvPUFrXT4sPCIxNDkvYCk9RzwyW04rMktHQmJcMm5odCUib3MjRiJAOCYoKUlgY0tKY1QlayprNj9OKHRtPjokYmo6SW9rNXNXQihsQEtDNyZfZF5QQ21ETDhAUGxJMVlwSV5UN2pOXStcQzYkWiopTV4jJjQ9XzxkVVZldWZAPip0UWVGbmt1NiIuIkhbMyxEVEdbPDE3SUtEcF0yWlxfdVEjIzduciwlSSwrKT41P3BwYlBGQlJvL3BJKVA0aHQyMlEvYENrbCpicGBzMCdbPVtmNSFTXyZoK0U4VyJSQXEpVjtoNnFhUm4vL2huLFBRVXJyNVZURlRYI2MocVcoXTpaRmEqVD0tPmgtSz4lJF9jRWdIUmxANjxocGc1aldNWWg4Qj5NYS44M3NlVDtiXCpHMDhHN11oSWZldDxGVmFxMjpqailpb2xHYGViQkEtRlQsdEI0RClfLV4tQ3JwOCQ9S2RHTFdYVDEwaDUucWNbZGlvViclLEZuNVAiJiVybG5TMS5dOUBBL3E0OjdZUjVmODoyUCVYQXEtcUUhVFVMSCw3cU5kNVBMKCtnUm44Z0JRRVZrQkxpZFFLPjhSZVhMNGk4aDMqbVYqViUybUItJltfW1UoJmp1XE1UUWM7Q15QcnVVSFxVJEpQcm0jJ0BCIXBITCE+I21pdSU8bXFIJjpnXEJWIzQ+cT9CPzZLT28xKFhgO0llJzFeWF9nWjtVQEZSTnFnSihASTJmUSgzKyJXR1JONnRiTFhITHVDKkY1bjpfdE9lVz5mW2Q3XCEnVGVdW1dmaCoydXFxQU9MQGBQLTwtLz10R09aVWwrPisrViksaz9KMEZDUDAodFdSW2xTLSs2LyFlXE1bLT9icXQkWUlmVTRMOV9Tfj5lbmRzdHJlYW0KZW5kb2JqCjExIDAgb2JqCjw8Ci9GaWx0ZXIgWyAvQVNDSUk4NURlY29kZSAvRmxhdGVEZWNvZGUgXSAvTGVuZ3RoIDYzMgo+PgpzdHJlYW0KR2F1MSo0YEIoLyY7R0UvTUtgZ2slXVpMSFVLXENFYilkYDRdNEBWM1pkIjRLJ3AzN2pKKUAkZiJFcmgiN2FYTyZWNSpJOmNiMSRbbktaJl1ETGpHVTUkXEpOKHRBcztORGBhLT1CKEwpTTpkMTtBWCk3cU4kP1JsMSFmIyYyWWdZLkNsSVcxXypQXzdAXXBRckhWa0ohOmpraywwdD8nXVBVUFMkLHAiRnJSKkVmV01GYU5cSis6LSVqITh1ODRxNmJzRyVTQDA2OFIoYGtwO1JIbzx0UCRiLnFySj5rW201OyVJSTcoQURmUko9XGpXSFVxRHNJPi4nbkdjalc1W2JWXV5YVHBHKXA2OlJYUUVrclZdJy8+aFwjMmNucy48OWVtbXU4Pj85dHREIlFkalMlbFxVSEBWVC08NCVQIiFAbTJ0aCVdZUhwWV5YSlxoOj9qZCpNX2MrQ3NMcmFgKltOdHE6VkROQzdHZixQVUIkUylXZDVlWlA2WkJQbixca2dSOkNJcEtLYGtGYVNZWCwuNGtlJGpgRGpJVzBPQDZHc0tePGBbc0haVUhCbV1jbS08MnA7ZnQ2Zk9IPTlVRmg0THMvTThCcHNJaD1yTEc8ajA9ODpxcU5eaSxGRG1gYXArUDQlcUQ8OD1uPmxWVU5nUUsqJzRyN280N0V0R2JvVFNJclFtTyxCUU1BImE0PTlmMVtrYSkpYk5PT3Q4OVgiP2I/Y2JudGZNZTYuMF5BUzUoU3J0ZWluN29cJlNeOi9hY1prTT9RQCwrM2hfRGMkRV46bmlJOSIqZVs2YD49UWxdJTRVWDRtTXUxLyosdVdaWGQtfj5lbmRzdHJlYW0KZW5kb2JqCnhyZWYKMCAxMgowMDAwMDAwMDAwIDY1NTM1IGYgCjAwMDAwMDAwNjEgMDAwMDAgbiAKMDAwMDAwMDExMiAwMDAwMCBuIAowMDAwMDAwMjE5IDAwMDAwIG4gCjAwMDAwMDAzMzEgMDAwMDAgbiAKMDAwMDAwMDUzNSAwMDAwMCBuIAowMDAwMDAwNjUwIDAwMDAwIG4gCjAwMDAwMDA4NTQgMDAwMDAgbiAKMDAwMDAwMDkyMiAwMDAwMCBuIAowMDAwMDAxMjE4IDAwMDAwIG4gCjAwMDAwMDEyODMgMDAwMDAgbiAKMDAwMDAwMzc3NSAwMDAwMCBuIAp0cmFpbGVyCjw8Ci9JRCAKWzwzMzU4NjhjNTM4MTlhY2ZjY2RhYmNlM2Y5ZGZiNmViYj48MzM1ODY4YzUzODE5YWNmY2NkYWJjZTNmOWRmYjZlYmI+XQolIFJlcG9ydExhYiBnZW5lcmF0ZWQgUERGIGRvY3VtZW50IC0tIGRpZ2VzdCAob3BlbnNvdXJjZSkKCi9JbmZvIDggMCBSCi9Sb290IDcgMCBSCi9TaXplIDEyCj4+CnN0YXJ0eHJlZgo0NDk4CiUlRU9GCg==</script>
 <script type="text/plain" id="guide-who">JVBERi0xLjQKJZOMi54gUmVwb3J0TGFiIEdlbmVyYXRlZCBQREYgZG9jdW1lbnQgKG9wZW5zb3VyY2UpCjEgMCBvYmoKPDwKL0YxIDIgMCBSIC9GMiAzIDAgUiAvRjMgNCAwIFIgL0Y0IDUgMCBSIC9GNSA2IDAgUgo+PgplbmRvYmoKMiAwIG9iago8PAovQmFzZUZvbnQgL0hlbHZldGljYSAvRW5jb2RpbmcgL1dpbkFuc2lFbmNvZGluZyAvTmFtZSAvRjEgL1N1YnR5cGUgL1R5cGUxIC9UeXBlIC9Gb250Cj4+CmVuZG9iagozIDAgb2JqCjw8Ci9CYXNlRm9udCAvSGVsdmV0aWNhLUJvbGQgL0VuY29kaW5nIC9XaW5BbnNpRW5jb2RpbmcgL05hbWUgL0YyIC9TdWJ0eXBlIC9UeXBlMSAvVHlwZSAvRm9udAo+PgplbmRvYmoKNCAwIG9iago8PAovQmFzZUZvbnQgL1N5bWJvbCAvTmFtZSAvRjMgL1N1YnR5cGUgL1R5cGUxIC9UeXBlIC9Gb250Cj4+CmVuZG9iago1IDAgb2JqCjw8Ci9CYXNlRm9udCAvSGVsdmV0aWNhLU9ibGlxdWUgL0VuY29kaW5nIC9XaW5BbnNpRW5jb2RpbmcgL05hbWUgL0Y0IC9TdWJ0eXBlIC9UeXBlMSAvVHlwZSAvRm9udAo+PgplbmRvYmoKNiAwIG9iago8PAovQmFzZUZvbnQgL1phcGZEaW5nYmF0cyAvTmFtZSAvRjUgL1N1YnR5cGUgL1R5cGUxIC9UeXBlIC9Gb250Cj4+CmVuZG9iago3IDAgb2JqCjw8Ci9Db250ZW50cyAxMSAwIFIgL01lZGlhQm94IFsgMCAwIDU5NS4yNzU2IDg0MS44ODk4IF0gL1BhcmVudCAxMCAwIFIgL1Jlc291cmNlcyA8PAovRm9udCAxIDAgUiAvUHJvY1NldCBbIC9QREYgL1RleHQgL0ltYWdlQiAvSW1hZ2VDIC9JbWFnZUkgXQo+PiAvUm90YXRlIDAgL1RyYW5zIDw8Cgo+PiAKICAvVHlwZSAvUGFnZQo+PgplbmRvYmoKOCAwIG9iago8PAovUGFnZU1vZGUgL1VzZU5vbmUgL1BhZ2VzIDEwIDAgUiAvVHlwZSAvQ2F0YWxvZwo+PgplbmRvYmoKOSAwIG9iago8PAovQXV0aG9yIChDbGllbnQgVG9vbHMpIC9DcmVhdGlvbkRhdGUgKEQ6MjAyNjA3MjgxMjM1NDMrMDAnMDAnKSAvQ3JlYXRvciAoXCh1bnNwZWNpZmllZFwpKSAvS2V5d29yZHMgKCkgL01vZERhdGUgKEQ6MjAyNjA3MjgxMjM1NDMrMDAnMDAnKSAvUHJvZHVjZXIgKFJlcG9ydExhYiBQREYgTGlicmFyeSAtIFwob3BlbnNvdXJjZVwpKSAKICAvU3ViamVjdCAoXCh1bnNwZWNpZmllZFwpKSAvVGl0bGUgKFdobyBOZWVkcyBhIFN0YXRlbWVudCBcMjA0IEhvdyBUbykgL1RyYXBwZWQgL0ZhbHNlCj4+CmVuZG9iagoxMCAwIG9iago8PAovQ291bnQgMSAvS2lkcyBbIDcgMCBSIF0gL1R5cGUgL1BhZ2VzCj4+CmVuZG9iagoxMSAwIG9iago8PAovRmlsdGVyIFsgL0FTQ0lJODVEZWNvZGUgL0ZsYXRlRGVjb2RlIF0gL0xlbmd0aCAxODI0Cj4+CnN0cmVhbQpHYXRtPD4+czk5J1JvNEhTPlU1ZiMlUkpzSUgoc09GO1VbNERSVkVJJlttayRbQjNpaT5rWmU8T15wT0tQPidEajE4VGdSVC1KZEFHQVxeN2l0J1BQUDhyTSYlKicuZUxdY1pkJkM5b1RIai07OF87YlExRnA9KWojKiZkbyY2Xj1oQFhKVmQvX2M9MWByak0rTSZYJFZIX1M6XlRxIS1yOF5fbE1dL2IxVkpDclMuVVsvTjpYdEU1ckBpNCtZPmkhPDlfPiFyQ3ExO3U0X3JvNTdkMzRJYF8+KF0pYFtDXTtFIm5aMk8kYDFtWkxLPWduM1Q0aEg1KnRTTVBEaWpSJW8lcyRiMGUiUHNGPEJVKHRqUzs9LVB1JzNdQyIhYisxWk4tZGErTCNxYT82KHEkNmk7Jk1zcVpxaWEpO0svOCslMm87XlVrP2luSC9nOFovJDdAWGF0PW5eOj5MRTklN0tBNE9EXEJYYSxZRlhRRWQpMUxvPiI4T3RVcz0kO2A2VicyNyphV1RXTEpuWlpTIlFXb2okOTRIWSdeZik/cF8vKHNRaiEsZyY3cVxgQ09tREZcVGdUZSNjO2lZbDMiL0M1YDY9MzxfN05OMihWQFs1IispPD9IakVyUGxTcEZCNk9vZGgtMnM0I1tGaEBXUlw5MGd0SyNiN2BpKWZDREVpbzwkUjUvPTlHa2dCXiRsOWYlaUhrIW9EV1JeMmhkaDVqSy1oUVxDMDYjVyYwV0hINFAmLSJzM3MoW2drOGc7W09bcGQpNVVJVSQqVGlnYSM1Qiw3I0NXQDFtTy9NQ15sSUBAVC5TQmZGPDlHQTQ5LlFDITQ7KG0mVVw/PkUuPGopNj0hKiskJExvZWwwJzwjKSNnYj5maVhHIlk7VmM+S2JYZW1BIkBMcjtoaD5CPF4/R2lBQE1uUF5LYSxTWTI+OG4rcSk2RyhpVVItWEY5Im5zNHMxaTAsJFdNI2MxOVBraCoiTE5BbUotcVQuPXNsOiRubiZcPjUqKzdgLS1kbGE4UiQuaVUtXUBuKWBgSzMlcjY7O2EwOlw2XSthY1hUOCJsT280OlBJWyRrJ3MrcyZvQFRqP0ZvKlZccDVUcTdnJl5mR2YoXXM3aSZVZTdEVWxxOi8sLHQzMz9rJ3JmX2U8MSI8MVFIXjRBdF1TcjctT3RbZ11PKmlZPE1KN1ouQyhJNz1uOTspbUEjZy5kXkNHMlhzQz1JSV9LQldmW2ZhVEQlPmZhKlsoK1wrPE5jcmFHI0hPbyp1azctTTxuKUNKNGpsYmImKSooVys4NExkNSVNLlBmV1VqPmIwOUVLJm8lQDoiLCxPIV1qOXBqWD9vNG5xPG5uVD4xREk+NTNRIUQoPmchOkRwbG0uUWkrIzhxK21gU1E1V3EnXCEsQEwxNWo0Nk0zYEMoPTtCY25wWUNQcF1WW3EzJEloVWQ/NFleTjtsImdVMjtVZ1ctVjMmU2FMb003XkxNNWE/bjpbMzspMFZhTjohS20nRFolMDpHQTlSJT9hcDNRXjcvSiQkbFlfRldkQi1QcytrZCVbXShrS1VESzRMWWk7I09dY2lVVG4tYDpaWnA6UUVJLTNWJ01DMkY/PCM7SyInTSFsYDZwL0dfNDtmaGdCIzNeJ2o9QiJqP1taM1hKRkhANFNaZy8vYV1KdUNeb1FVIlBISHFRJ2ZYQXEuITJZQ0VJc0UpJV84VF8tIl06NFImLC5rbCtdWmhNZnMrKXFxSlhRRyNQQidgVT1DYVg4PzJZL2c2R3VHWytrQT9BJGZjKjJeaGs/Xy82VFFAWyEqNkNFc1cnc1YlM05ARjEhYW5HIzk0RSJALz00U0N1bV5pP1dhLDdSX0cvMCEpRT90NnRcb0FIVEM6R0VIS0FnbC1nYDM7M0dfa1ZdJ2RDbTtRQlU3TFVlMTNDXDUkLGhCc3AuQTxdYG9XVyhrVD5fW3QqWzM5PTc7SjpCbzFoTyN0bU9lXT84KHByRTdrajpTSiZyK1g1ZSlEQXVraihZYUJQSjE9UGE1RG5uTykndVdLXktKQWwiMVBEOT5KMnI7XD9pXE9eQ2RyI1MkVFZsSUtpZD5ESnQ+WTgiIV0kPFNSM2VVSl5iLUBwMXBtQEM0N1VvMW4oMitCVF1IJS9WY2RAcm04LFc4T15sIjQtNTZgV1FgbXVQc0UsbnQ9V1lQQGllJGNwTzk0bF5VMjdSaSRDcUYpWTRMVFNVSFdyQkZxUXJcXC9kWElQWldkcWtEbEhJRypQbzVCbCkuIWktXVdOOD03XzN1VVhOaDk4Ql1DKkVGOzpPbyhTXFdyPTsvZG9WcHFzOS8zNl08OmItQlwvby8vLzQlayJAUmBpXUZXbiNoQC44amRXTEJbYEoyLDw6PDd1XCkuWCNfZC5QJSpsPEQsPUgrLjBOT2xNfj5lbmRzdHJlYW0KZW5kb2JqCnhyZWYKMCAxMgowMDAwMDAwMDAwIDY1NTM1IGYgCjAwMDAwMDAwNjEgMDAwMDAgbiAKMDAwMDAwMDEzMiAwMDAwMCBuIAowMDAwMDAwMjM5IDAwMDAwIG4gCjAwMDAwMDAzNTEgMDAwMDAgbiAKMDAwMDAwMDQyOCAwMDAwMCBuIAowMDAwMDAwNTQzIDAwMDAwIG4gCjAwMDAwMDA2MjYgMDAwMDAgbiAKMDAwMDAwMDgzMSAwMDAwMCBuIAowMDAwMDAwOTAwIDAwMDAwIG4gCjAwMDAwMDExOTkgMDAwMDAgbiAKMDAwMDAwMTI1OSAwMDAwMCBuIAp0cmFpbGVyCjw8Ci9JRCAKWzwxZDUzOTIyNzU4ZWYxMWI1NWVjYjc5MjJiN2U1MWRjOD48MWQ1MzkyMjc1OGVmMTFiNTVlY2I3OTIyYjdlNTFkYzg+XQolIFJlcG9ydExhYiBnZW5lcmF0ZWQgUERGIGRvY3VtZW50IC0tIGRpZ2VzdCAob3BlbnNvdXJjZSkKCi9JbmZvIDkgMCBSCi9Sb290IDggMCBSCi9TaXplIDEyCj4+CnN0YXJ0eHJlZgozMTc1CiUlRU9GCg==</script>
@@ -11396,18 +12218,377 @@ function renderRptOvertime(body) {
 <script type="text/plain" id="guide-ebay">JVBERi0xLjQKJZOMi54gUmVwb3J0TGFiIEdlbmVyYXRlZCBQREYgZG9jdW1lbnQgKG9wZW5zb3VyY2UpCjEgMCBvYmoKPDwKL0YxIDIgMCBSIC9GMiAzIDAgUiAvRjMgNCAwIFIgL0Y0IDUgMCBSCj4+CmVuZG9iagoyIDAgb2JqCjw8Ci9CYXNlRm9udCAvSGVsdmV0aWNhIC9FbmNvZGluZyAvV2luQW5zaUVuY29kaW5nIC9OYW1lIC9GMSAvU3VidHlwZSAvVHlwZTEgL1R5cGUgL0ZvbnQKPj4KZW5kb2JqCjMgMCBvYmoKPDwKL0Jhc2VGb250IC9IZWx2ZXRpY2EtQm9sZCAvRW5jb2RpbmcgL1dpbkFuc2lFbmNvZGluZyAvTmFtZSAvRjIgL1N1YnR5cGUgL1R5cGUxIC9UeXBlIC9Gb250Cj4+CmVuZG9iago0IDAgb2JqCjw8Ci9CYXNlRm9udCAvWmFwZkRpbmdiYXRzIC9OYW1lIC9GMyAvU3VidHlwZSAvVHlwZTEgL1R5cGUgL0ZvbnQKPj4KZW5kb2JqCjUgMCBvYmoKPDwKL0Jhc2VGb250IC9TeW1ib2wgL05hbWUgL0Y0IC9TdWJ0eXBlIC9UeXBlMSAvVHlwZSAvRm9udAo+PgplbmRvYmoKNiAwIG9iago8PAovQ29udGVudHMgMTAgMCBSIC9NZWRpYUJveCBbIDAgMCA1OTUuMjc1NiA4NDEuODg5OCBdIC9QYXJlbnQgOSAwIFIgL1Jlc291cmNlcyA8PAovRm9udCAxIDAgUiAvUHJvY1NldCBbIC9QREYgL1RleHQgL0ltYWdlQiAvSW1hZ2VDIC9JbWFnZUkgXQo+PiAvUm90YXRlIDAgL1RyYW5zIDw8Cgo+PiAKICAvVHlwZSAvUGFnZQo+PgplbmRvYmoKNyAwIG9iago8PAovUGFnZU1vZGUgL1VzZU5vbmUgL1BhZ2VzIDkgMCBSIC9UeXBlIC9DYXRhbG9nCj4+CmVuZG9iago4IDAgb2JqCjw8Ci9BdXRob3IgKENsaWVudCBUb29scykgL0NyZWF0aW9uRGF0ZSAoRDoyMDI2MDcyODEyMzU0MyswMCcwMCcpIC9DcmVhdG9yIChcKHVuc3BlY2lmaWVkXCkpIC9LZXl3b3JkcyAoKSAvTW9kRGF0ZSAoRDoyMDI2MDcyODEyMzU0MyswMCcwMCcpIC9Qcm9kdWNlciAoUmVwb3J0TGFiIFBERiBMaWJyYXJ5IC0gXChvcGVuc291cmNlXCkpIAogIC9TdWJqZWN0IChcKHVuc3BlY2lmaWVkXCkpIC9UaXRsZSAoZUJheSBSZWNvbmNpbGlhdGlvbiBcMjA0IEhvdyBUbykgL1RyYXBwZWQgL0ZhbHNlCj4+CmVuZG9iago5IDAgb2JqCjw8Ci9Db3VudCAxIC9LaWRzIFsgNiAwIFIgXSAvVHlwZSAvUGFnZXMKPj4KZW5kb2JqCjEwIDAgb2JqCjw8Ci9GaWx0ZXIgWyAvQVNDSUk4NURlY29kZSAvRmxhdGVEZWNvZGUgXSAvTGVuZ3RoIDE3OTUKPj4Kc3RyZWFtCkdhdG07YkJEVnUmRGQ0NmslKWpmV1BdOXBaWCNHM1JRO2dvRyY2PDokWi4iIVApdGIuIitrXmdwRG5icDslWmVXWTNrOCk4NzJZM3BXZVxJTlNoXFA6KClTMiQsJDgkIS0nLGEhcUBmUE9xNyU/M1chdGhcczVRbFxVaWQrKGtgWl1LLEQpVj5LY2A4YVJSKDo+aUxKamkwbCc1NkJKNigxZUBtKUJYXjU7JU03Qj5FNCNTc2BKOk0nSWpePV8/W29TPFxWJ2VZXSlJWDFpU0NFNGJJOSxJcSNcWjJJPmo2XjRgTTEmTi9wPGwzM3InJixrKyxeMy1aLkw1RGlyJ2xhMC9qRHMuQ0M9WHFSWWtGPSJTYjJgSmxkIyYpLmAsYWM6Zj1YPFJiM2NnSWRbMkd1by07SFEmSScxcFwzIihfTHJkWzpFJV9qYDU2Tk9YRyU0ZGIjSVNGRW0xa2FaVUFtYHIiKjtTW09fInQ5MTpoYTtLPVEiazJrajBiOS1saiopPyoxSGkjYTlMWVluJzxDKyd0Qz05YzkjRzUqY0xsOFEoS2UiInJPOUpeIzMkX0ZZRkkkJSRlRTxXMThxST5yUFVUMElAUmF1LmpfPVFHQyQ/ImNqX3JaNWZnPi1UYy8qUVY+UnBFVztdTCVVJy9JIiM6aihJWyhvXyx0R2dWcEVSNiUmJzdtKFczI1pnNiVpR1JnXk8yP2xBKlkxN2cwR11xOE5XWHVtNGReI2FMKDA5N25nNyJOdGMtLlw/OGw2RXUqQUo6N1luT3BpT0Y5NW4sanMkIk5oSj1ObylpMTBOVzRVckw9U3NpQjwvSXBwXlUjZDBhWi9ZVjVXbTtHcyZxTkEkUV9GNFluUVtGLlJpT18iYFosPXNJJ2BUR0BALC0zLHNnN0JRQWRZSSUwJF5kcTc4U286OilFaiJdZEZAK3VkbD5ybWxYY05WKmwlOCRsPWdCPXBcOEc6dW4/PE8lZW9KYXBqIjEiZ3I9Z2ZuN3AkXEFHbSRkNCRtL0NqKWFTKDA7NF5RUyhvKEtgTzwsUWZrITBUS2FgYy8hMHFoWzhrS3F0WEk9QXU+IiMiazMtWW1hdVpBU2FaQG1TO0E1Z3JbaFYxU01abVdlMHQiWUJKTE9YR2c7bWZjSmZdUVhlWk9kZWlASic3Nz9IZTheVlM8b1UiTkk1R3BSQyhiQk1UWl9LXVdNakEjSGxWa0QjRl1qaSpySkAuQjNrcGZUSCZmKVtHQjBKTW9daEcpQF9HRmlQS0BkSmhfU2Q6YV1rKSY8ZjUqbmghX0VpbHQ4ZFhYRk5wSW9aXllgYURuQz8iTF1jKEhoYDVWckJvYyZDRj82OEtEXzE/JkpeZG1iLkZbWm1naW5gYSwlNUpmNCNyKltrIV5AUmFeWWBeMkc7SigwYGRwMnJxZUs5RFdvQktMTURETGRbXmcmUkNFPU5lXiw4ZDVOM3MvYSE/cVZaKmZQWkoxb2s5Q10kb143YjZQbzg/akI9NTc1T0g/Uj9aOlw0WigmZXBnM1RjMVwxbGBsZCxoRTYjViU0PVdOMkpiOzkxMT4/ZzRRcUZdL3VSUl86NEMoRG5qZ25OQm8uU09wY0pDcmdfPTEpWidxb1I8OWFGZmovLy1fLXQxWURjSm09TFJEPilgLCIiUmtAUFkuYiopWiNzKjJMNElwQDtbMiFkdDE7OzdRNVMiNltWT0BrIVJjT2pvcXNiP2xOU3VWSzdwXllZRGBlbEUzTVQrcD8wSGZiJUBFJEw2PG0tYSRJX0NOMnBNRD1qRHRhKDlVJjZGLVQnUVg3TVRCNyNgL2okNDhsVUpTcSpCcCYlQzg8biRNT2hoXUVAU1ludS4pPUUtOWRgJzAyQVhwLm0lM0FEXWlnP2shbiQ6IUdUUVMzUSVEbS1HZSNDIjBeQFJlPWJGOT0+NSZbKUFJVC1sMylTYGY9LCNZLSdZRnQ+I1ZZTCVmam43cGFca2lFXWNVW2FZJnJtLipmQEo5Y1U/PClkKF9jbCE2MVknTF8rckE8RjJRWzZKWEAxclVsR1NHZVdKIS1AME1TRC4vUUpdXUFFJGo4Mj9YcDJwS1grODlDI28oajpAUy9cWkBtOHFXIVRcSF1MQnVjRSU5cHAxKD4kRFckSmojXFFtcUJOaCpqZHFENj5aKSZYXiNMNmBmbUBXaTJbXllRbC8sJTU4NDxQcCQ0V3BRWl1rO1VwK28yKXBJLyNsaTIpcjJuKG4nOUA6KlVqWU8zUGJFYSE1UzM3c1xNOVNRTzUqSlgwNG5aWD0mXk0lZGNCLmhhMHBqTikmUUZVP05VaF9ldSkvSycyZV1aZTtdJURQLnAkV2NsQ0ZFNzBSLTpeKWRGS11TdWZ0WlMjP10ifj5lbmRzdHJlYW0KZW5kb2JqCnhyZWYKMCAxMQowMDAwMDAwMDAwIDY1NTM1IGYgCjAwMDAwMDAwNjEgMDAwMDAgbiAKMDAwMDAwMDEyMiAwMDAwMCBuIAowMDAwMDAwMjI5IDAwMDAwIG4gCjAwMDAwMDAzNDEgMDAwMDAgbiAKMDAwMDAwMDQyNCAwMDAwMCBuIAowMDAwMDAwNTAxIDAwMDAwIG4gCjAwMDAwMDA3MDUgMDAwMDAgbiAKMDAwMDAwMDc3MyAwMDAwMCBuIAowMDAwMDAxMDcwIDAwMDAwIG4gCjAwMDAwMDExMjkgMDAwMDAgbiAKdHJhaWxlcgo8PAovSUQgCls8NzZlMTQ4OGE1Y2Q0MzZmMDExZWZlNTMwNDZjNWQyMjg+PDc2ZTE0ODhhNWNkNDM2ZjAxMWVmZTUzMDQ2YzVkMjI4Pl0KJSBSZXBvcnRMYWIgZ2VuZXJhdGVkIFBERiBkb2N1bWVudCAtLSBkaWdlc3QgKG9wZW5zb3VyY2UpCgovSW5mbyA4IDAgUgovUm9vdCA3IDAgUgovU2l6ZSAxMQo+PgpzdGFydHhyZWYKMzAxNgolJUVPRgo=</script>
 <script type="text/plain" id="guide-clientlist">JVBERi0xLjQKJZOMi54gUmVwb3J0TGFiIEdlbmVyYXRlZCBQREYgZG9jdW1lbnQgKG9wZW5zb3VyY2UpCjEgMCBvYmoKPDwKL0YxIDIgMCBSIC9GMiAzIDAgUiAvRjMgNCAwIFIgL0Y0IDUgMCBSCj4+CmVuZG9iagoyIDAgb2JqCjw8Ci9CYXNlRm9udCAvSGVsdmV0aWNhIC9FbmNvZGluZyAvV2luQW5zaUVuY29kaW5nIC9OYW1lIC9GMSAvU3VidHlwZSAvVHlwZTEgL1R5cGUgL0ZvbnQKPj4KZW5kb2JqCjMgMCBvYmoKPDwKL0Jhc2VGb250IC9IZWx2ZXRpY2EtQm9sZCAvRW5jb2RpbmcgL1dpbkFuc2lFbmNvZGluZyAvTmFtZSAvRjIgL1N1YnR5cGUgL1R5cGUxIC9UeXBlIC9Gb250Cj4+CmVuZG9iago0IDAgb2JqCjw8Ci9CYXNlRm9udCAvU3ltYm9sIC9OYW1lIC9GMyAvU3VidHlwZSAvVHlwZTEgL1R5cGUgL0ZvbnQKPj4KZW5kb2JqCjUgMCBvYmoKPDwKL0Jhc2VGb250IC9aYXBmRGluZ2JhdHMgL05hbWUgL0Y0IC9TdWJ0eXBlIC9UeXBlMSAvVHlwZSAvRm9udAo+PgplbmRvYmoKNiAwIG9iago8PAovQ29udGVudHMgMTAgMCBSIC9NZWRpYUJveCBbIDAgMCA1OTUuMjc1NiA4NDEuODg5OCBdIC9QYXJlbnQgOSAwIFIgL1Jlc291cmNlcyA8PAovRm9udCAxIDAgUiAvUHJvY1NldCBbIC9QREYgL1RleHQgL0ltYWdlQiAvSW1hZ2VDIC9JbWFnZUkgXQo+PiAvUm90YXRlIDAgL1RyYW5zIDw8Cgo+PiAKICAvVHlwZSAvUGFnZQo+PgplbmRvYmoKNyAwIG9iago8PAovUGFnZU1vZGUgL1VzZU5vbmUgL1BhZ2VzIDkgMCBSIC9UeXBlIC9DYXRhbG9nCj4+CmVuZG9iago4IDAgb2JqCjw8Ci9BdXRob3IgKENsaWVudCBUb29scykgL0NyZWF0aW9uRGF0ZSAoRDoyMDI2MDcyODEyMzU0MyswMCcwMCcpIC9DcmVhdG9yIChcKHVuc3BlY2lmaWVkXCkpIC9LZXl3b3JkcyAoKSAvTW9kRGF0ZSAoRDoyMDI2MDcyODEyMzU0MyswMCcwMCcpIC9Qcm9kdWNlciAoUmVwb3J0TGFiIFBERiBMaWJyYXJ5IC0gXChvcGVuc291cmNlXCkpIAogIC9TdWJqZWN0IChcKHVuc3BlY2lmaWVkXCkpIC9UaXRsZSAoQ2xpZW50IExpc3QgQnVpbGRlciBcMjA0IEhvdyBUbykgL1RyYXBwZWQgL0ZhbHNlCj4+CmVuZG9iago5IDAgb2JqCjw8Ci9Db3VudCAxIC9LaWRzIFsgNiAwIFIgXSAvVHlwZSAvUGFnZXMKPj4KZW5kb2JqCjEwIDAgb2JqCjw8Ci9GaWx0ZXIgWyAvQVNDSUk4NURlY29kZSAvRmxhdGVEZWNvZGUgXSAvTGVuZ3RoIDE2MzQKPj4Kc3RyZWFtCkdhdG07OTJqazEmQUlgZF0ma1xXVkxsJk1wPi1QaD1KZExmL0RjZ1lFLGNqRCZgWnRaW00vNiNbakJeYUs5SGMyTChqYnA7S3FIbWE0RiYlX0BQMUhkaSNxaSUtUTRWVyImODZXKFVCT24pLFpaR3JfU2s6LVUiYURxYml1IU1QVnRpQSJSYFE1PjphJGNJMWQnMChNaDZKaTg8Oi80VjI/IylhOjFYb2U3W0JwLUJhbVdObGgtU3BYJjNpOzQ0aTNEQmtQZmAkTTJ1V0lmQnAmSjArXj84cilLMFQiJFxrQEVHNClAQy40aE1WR1EuWi86WGlQPGIlI2gwNUsxOkE9VmEtaCFxK2xNaSktbC00ZkZPIXRxYS87ZSFXV3BPKGorYitDVT9cSj9uJWYqZEd1K1VmLHNuQDIhJis0P0pRRCowRTBXSSVISz1nKSskZVhRKmtxRD8hOy1rUC1SK3F1QE9kKmlkXStHJSlhSCdvJ3NlZCkqa1o0WSVGISdcOzFQbyFBajFcZilgT11XQlwpSFxgdU1nIUo5QmR0VFtGIl4nK21aU09TMl9hcC1BZFFmWzBVUl87amtfOy5BNUxCaVJNPk9hajxIY2NaR01EODkvMic+LkgjK2siZ0hVaE9DXl1mLDQ8KSUpTmNAVy9UWWlGJz5HI1w5OnNyM3FcXVUwQ0c+KSUvTmslKUpfU2BHWjtdSVxlczZLMk5oa0U3P2BJSmo5JkZbNTFLT0RYUU5DI1tiNiMkT2tMXCM2WlZTJG1mNHVEO0UrUylub2dpNzs1WSokJD1uMkBcYElPRkNfPC1TSjhkO2QjNkxZXF8yQVdxLTxtOkA9JVAqTlI+alhuZ1thYVpdWzFUaExKOFw/MFRxJkN0TiZBS0kuLmtBKDkmOzFMSnRbRUgjY1NobClrLUhJRlYjPz8ndD4lalI2WT1UM2VhbCZHbFxUIz1INGIsIys4Ik9RbyhlKFAsMmB1M1hpODA+L3UwRzM8NCYnYy0oITglQFYsOSlRaEE1UiRWKD04WD9KNFJgWnNObUllYUdWRC02W1VgTFxKU1JDaE5XUFRaITFvNnN0al0nI1A9ZzdoMjZzLU0zWnBcaTY4aDtiMydTKDBiaU9CLj5EcT5Xb2YvWjxGZjc6XEBxMmdrN0ZOPXEiYGNyLUZARXFiN2pzYzZnOjw0XVEwXVVUXT9vbkt1QWg5KFZZOVZeby8vWDdcOF0kRT1SPSdlSUk8cFIoalc4SFNeUiREKV9kNWskOTdRPlpqRyliaShSLFtxbVFhPFVgKSlbcztzJ2E/TUJzTjpTTCFaU2FMLicvT2BxKSpRQm1SSm9iX0oiQTQ7Y0teX01GT1hKcEhMTy9cO0JaciZRZ0p0c2E3XVVCOnQ3JkZPKnJxWyo5RCEpJ0hwa00rSkMiWExTQiw3YGw1Qj0iMD5sSk5jJHJkVDhjUDxhdS5dYG1dWEAuMVwpKFthT1dvUkssJSNJX1lTUjkhSV85RycyKVRqai5ZWjtIMTVyXE42TT9fYWNhZCJjN1g3RkpCLComUT9DUztBSEZFT2Q4Qys2K1Q0NGE2bWd0Rl9HMzk0MmI0YW1HLCY2dDktVUEsRk4hVSNRTlYndVZcJFlsXFZYbXFuPiFDYj43PltWMCcxIVFSTDpVZ05eSVhjIm83TjpAQT4uPGc/WCVlTnVfWWxCU1c6I29xJW0rbCdpTkYwbCNYSmhMZSI8OGsiMzEhLmxeIUlRTkFkIUVldGJfLFBnYWMuWTlza0cpRiQnUiY0JnAvNGs2SD9SdVprdVokbE5WWnNSOStEXjIzaC5oRk8pKUwiJkc6R2BAQihOP1cuYEE8ZE42YChnTmRmUkhDaHQwREdvL0U0TGQ+KShGPz5fZXFjJ0xHMklZLDhZQ2wiOmtCTUhtO0Q0OFlmV2c4IkdqNnVSRyNuXWBeIVlYJy87JkZzRydyYiZkIjxQaV0yO1lZS2lmUCs4ZXJzIydJZiRPXGciNHMqKCVZcDJdSyJsQUdcUGBdTHEmcSFuWEBqQ3MqWydmZyxWXlZtW2VnVjsuO0s7KVg4R2JFUihzWTIsU1tDVWFBYEE3PyZiNzNxKChjMUglV0EkXXVTQz0xaU5dQjxNKz8xIVhZPysjL1F0ZFBNQGZTQ2AjPmFZWiFRI1BMMUo5RX4+ZW5kc3RyZWFtCmVuZG9iagp4cmVmCjAgMTEKMDAwMDAwMDAwMCA2NTUzNSBmIAowMDAwMDAwMDYxIDAwMDAwIG4gCjAwMDAwMDAxMjIgMDAwMDAgbiAKMDAwMDAwMDIyOSAwMDAwMCBuIAowMDAwMDAwMzQxIDAwMDAwIG4gCjAwMDAwMDA0MTggMDAwMDAgbiAKMDAwMDAwMDUwMSAwMDAwMCBuIAowMDAwMDAwNzA1IDAwMDAwIG4gCjAwMDAwMDA3NzMgMDAwMDAgbiAKMDAwMDAwMTA3MCAwMDAwMCBuIAowMDAwMDAxMTI5IDAwMDAwIG4gCnRyYWlsZXIKPDwKL0lEIApbPGQ2ZjQ0MmE5ZWVmZmVlM2Q5OTNiZTM0NTk0ZTRjZjJlPjxkNmY0NDJhOWVlZmZlZTNkOTkzYmUzNDU5NGU0Y2YyZT5dCiUgUmVwb3J0TGFiIGdlbmVyYXRlZCBQREYgZG9jdW1lbnQgLS0gZGlnZXN0IChvcGVuc291cmNlKQoKL0luZm8gOCAwIFIKL1Jvb3QgNyAwIFIKL1NpemUgMTEKPj4Kc3RhcnR4cmVmCjI4NTUKJSVFT0YK</script>
 <script type="text/plain" id="guide-payrolltools">JVBERi0xLjQKJZOMi54gUmVwb3J0TGFiIEdlbmVyYXRlZCBQREYgZG9jdW1lbnQgKG9wZW5zb3VyY2UpCjEgMCBvYmoKPDwKL0YxIDIgMCBSIC9GMiAzIDAgUgo+PgplbmRvYmoKMiAwIG9iago8PAovQmFzZUZvbnQgL0hlbHZldGljYSAvRW5jb2RpbmcgL1dpbkFuc2lFbmNvZGluZyAvTmFtZSAvRjEgL1N1YnR5cGUgL1R5cGUxIC9UeXBlIC9Gb250Cj4+CmVuZG9iagozIDAgb2JqCjw8Ci9CYXNlRm9udCAvSGVsdmV0aWNhLUJvbGQgL0VuY29kaW5nIC9XaW5BbnNpRW5jb2RpbmcgL05hbWUgL0YyIC9TdWJ0eXBlIC9UeXBlMSAvVHlwZSAvRm9udAo+PgplbmRvYmoKNCAwIG9iago8PAovQ29udGVudHMgOSAwIFIgL01lZGlhQm94IFsgMCAwIDU5NS4yNzU2IDg0MS44ODk4IF0gL1BhcmVudCA4IDAgUiAvUmVzb3VyY2VzIDw8Ci9Gb250IDEgMCBSIC9Qcm9jU2V0IFsgL1BERiAvVGV4dCAvSW1hZ2VCIC9JbWFnZUMgL0ltYWdlSSBdCj4+IC9Sb3RhdGUgMCAvVHJhbnMgPDwKCj4+IAogIC9UeXBlIC9QYWdlCj4+CmVuZG9iago1IDAgb2JqCjw8Ci9Db250ZW50cyAxMCAwIFIgL01lZGlhQm94IFsgMCAwIDU5NS4yNzU2IDg0MS44ODk4IF0gL1BhcmVudCA4IDAgUiAvUmVzb3VyY2VzIDw8Ci9Gb250IDEgMCBSIC9Qcm9jU2V0IFsgL1BERiAvVGV4dCAvSW1hZ2VCIC9JbWFnZUMgL0ltYWdlSSBdCj4+IC9Sb3RhdGUgMCAvVHJhbnMgPDwKCj4+IAogIC9UeXBlIC9QYWdlCj4+CmVuZG9iago2IDAgb2JqCjw8Ci9QYWdlTW9kZSAvVXNlTm9uZSAvUGFnZXMgOCAwIFIgL1R5cGUgL0NhdGFsb2cKPj4KZW5kb2JqCjcgMCBvYmoKPDwKL0F1dGhvciAoQ2xpZW50IFRvb2xzKSAvQ3JlYXRpb25EYXRlIChEOjIwMjYwNzI4MTIzNTQzKzAwJzAwJykgL0NyZWF0b3IgKFwodW5zcGVjaWZpZWRcKSkgL0tleXdvcmRzICgpIC9Nb2REYXRlIChEOjIwMjYwNzI4MTIzNTQzKzAwJzAwJykgL1Byb2R1Y2VyIChSZXBvcnRMYWIgUERGIExpYnJhcnkgLSBcKG9wZW5zb3VyY2VcKSkgCiAgL1N1YmplY3QgKFwodW5zcGVjaWZpZWRcKSkgL1RpdGxlIChQYXlyb2xsIFRvb2xzIFwyMDQgSG93IFRvKSAvVHJhcHBlZCAvRmFsc2UKPj4KZW5kb2JqCjggMCBvYmoKPDwKL0NvdW50IDIgL0tpZHMgWyA0IDAgUiA1IDAgUiBdIC9UeXBlIC9QYWdlcwo+PgplbmRvYmoKOSAwIG9iago8PAovRmlsdGVyIFsgL0FTQ0lJODVEZWNvZGUgL0ZsYXRlRGVjb2RlIF0gL0xlbmd0aCAyMjEyCj4+CnN0cmVhbQpHYXVgVGdOTSUqJ1JmRk9TQ05DZ1lTLSFuQV9uOC1US28yLUFmKTxGNipdTj5lQCZXKkJkUzxvOCE8NyEtKFRedENQTDFvW1VnSW5tc1FmTCg3PW0lZUYwMTVwYGtPVlk6UW5vTGJsOD9faElrS1NBWVphIz9FcTclaDZSZ0QkXidUWVRjPEtmQzViSkg9OkwhQCg7NlkiOmpAV2QnaitVQipVRG1lUV1rOCRhYTtvQUxcKHJTSCVnN3FwVWA+MHVQLnVeN1czO05VT1JWcF1XPjBwI2pmYVBHXHVsSkc+TztgW0NcIz1jLVx1UVhaQFtCXTtvQGhbTjlaY0Q/b2E7SmBhRD47LCouWEQ0P2kmOUZHJGgzUkhETGpJNzFARGBfdV1ZK3U9TXE4MzFSXEJmNiRPdEVMISkxSUJFbFwqbG1nXEZKR0BVbVBgPCpxOFNIcWFBaE8zQ0NUJihHQkMhI2giWyctbnNXSC1QcUJdXiE5PzhoRCYiYE1bPT9HY01yWTl1IzhcRkQiYlFCW1toPWQzQ0A4ZFxwLVJJWzBTO1BrI0drOUg/SD1JdU5RM2RjclU2YF1hITIzcmFOMDNXRWZqdHNXa1I6cjhQOl9QMChZXCdbWCZVRmxoJm1lOFo2NCtIMU00QFFJY0F1PDUvK0YoL0wsNSxvVytiIWtUZ2I3PCdyOyxRbzlyUWphQWknSS9ScCJiQWkzOiQ/QWZEQytZc0g9M01qIUU2ZjNuXjBdI1NnPzgjaFpfJkk5aiM/U0BfWHIkbEhoOVBFM1E3VWVbPks4UE0+RlgzYWtXRm0rM0JqYCwlJ0BiV21hI0xKW25hRShDaCFwR0cicClSZFMlaUloJjcmP01TQlpMRjIhPWo1Wj83QDpDYWVxMCdFLmhrZ19KKFlFYSkhPTQuYlk/S2coLWRSXEQ1ZWdCSVQxRksvNiFxOlw2JFgtNTxOSDMvMWVXVHBmQkYwX2JFKjJXNkMnTjNuO0IxMmdDQTkhQFVaQmNNTUhNYl1iQmNoJ1M8UGhAPjhjOzVdLSJoTV1vL1NEK1MqXGEqUzdxakplMCswIzltRVwuTVJmOCtTRGMtLktgRiUjdFJic0g3ckRYXUhAWVY4PW0iU2cwSzlkOmBRKDNmcVA/L0FxWkdEa25aS0ElNVdmLGNbcEJKN29CbXU5bENrUyFcOihVOWUiTFdkQVAwQlBtXlg8M2RWL15UNGs4dDdgcWJiTy9SVTM9SlBMMkU2Li0+JGs9dTk4VTJWcSNLTXErVTg3M2VZYzZ0PWcqT0U3cWF1JSJOKlUrVlBxWkxbPmAndTJIJUdVTzddQWMlSTJGb1wjO0chSG1kKS1GQC0pXXVrQjcyLG1FZzVuJzBUN2hMYmJZO1c/LVRhJk1FaVFDOyJNOGhtQHJVMzY7Yzo5TDYuaEdyXGc3UXIrOjIuOCRPKl5IbiJLS1pNLDxnYEleakMsJ2FRP28wXV0kX3FVIkhcIlRVQTxFKDFEU1pOZy0iTCVCSShKaD8qOS5mLjs3Zm5zIV9cY1tiYGE4Mk9ac1hbWj5zb1pQKiZBLjNQSF9bUTVjXkElaSJWQzc4KElBV1JLYEczNG48X2k5XWpKSCFvZDtpNnRFLy0yPkVaOGdGJyNGT0M9JkY/czRbPC4iQD5XSVo5UUtdVUBbUSE7QzRKbkJLLTwtdGddO3VlaGgrYUpqOFdbJWRHXTttP1cxcm5bYFcpRFxyMVFfIVllVlVCSk0hPW1LPUdMTGtbdGpPKFBPRCdsO2xwQ0lBMGwiNmBgISMoUTczIz07Iz4vJW46YD9vSE1lPiQkLzQ+VmVtZlxZW0YoYElmIyljITFKRltlUEVtX11pODUvJmReRV0yKihaN143Pl1STFQuZjIpZ2JoWytqQUhWXEYybU1cJnQtMCRbaEVmUyk0Lm5RKyprNnFLI0siVHAkRkE3JlpjKWE6PV1LPlxZLD5BbFRISCdqI3Bea2YsJ2ckZVRbJlAmPmYlMF1XOGFjUmVfKDJRPEUjUWgoVmFbPD5LXVloWFlwdUI/Mi1uVjxCMl4oZXVrXG1qWGJRbiMxVmFwVS5JPG9RQTdjWCRKYldQYXNFUllYaEUzL0o0Mm0kXW9hRXJqZVRHQmhEPCxqXGFNdC4xNlxgQFJLRklCUmBaM1E4NkBnPE1cOUJdWFBmISc+WEhIWidQTi5tbHNbYmQqMkcmJi1lSCRrXCthJ0hLV1tMJzkjKyhRNy5OLjxWJEQkUThMW2dGZjYlTj09Z0owZjZEM1psYE1XIzg7WF9tMC5PV0RhaEI9ZUZjYilEbUQ1WjA1PTBxMFghL1doXEk2ZjVOX0NgSlctNGhWKGAsNGRBZ201V1gwSzktMEQ3SzQ+MSNeO2U2WjRnYjEqLFFIXiVwWShfOllJPFBMWj5cIW1JTmBYK0snXm9TZEBfXTtgXHMhZTVIL1FrQVJPOmxpUScrM2I2JWU4VGhiLywiMElEQihFQEdJY1BEZUpXSyJDSkR0cmJiXExHLjdkcTYxYkZEZ0shO0VYbytkciFIZl9uUCReOVY9RyxKW2BjSmNaWC9NczJIPlZUImdyUWs9THRdP1hHbzFjSE00Skk9PVchPWxeMkFhZGpWN3VfbStEVFlITiEwNGlDNm5zO0I8YEtAMTZDcFU4cS9YZzVaQEVhUnMnR2MmJDZFPShELiYwMlNVZWteaW9MakRZRVgmczxJMnFmP0hUNiRpXlpJdV09JTBRLitfUjQ+KlNQcGhkYD4iKDItRCElIUAhcGo+UT9GT01CayhoPDtZcTQyT1hVaWMxJispQSxyV21PcyRnTzEvV2NLO2tRIz5ELSJ1OkZdNTxmWDomLi5xUDBaKDlLKSRaZiM9TCxuWyI8SytAP0FnXElua3FBLXFdOUdGXnRjRzolTCpEdENtakxOcVM5cDNfKCFTKH4+ZW5kc3RyZWFtCmVuZG9iagoxMCAwIG9iago8PAovRmlsdGVyIFsgL0FTQ0lJODVEZWNvZGUgL0ZsYXRlRGVjb2RlIF0gL0xlbmd0aCAzMDAKPj4Kc3RyZWFtCkdhclc0NT5NQTklKXFzZ01EbFxkI2FcZnFYcm90cio9QGVFX0snQmkpS188RTA8K2dAblhWL0o6ZygoL2dYIVdJSlZIS0JHcmwiZSE9cGdiNjZiYj4nTllQajQ5cCU/aVxHM2ZEaUwhY2cybDU0VmAiMHNbO1dVZG9UK3JIUzglJkRFTW1XSjRoL3RkOE9fL2plSSRdOlpGaFJvOnRmb2skKSdZRyU+ZUdXRHVEbkdfQTdWckxqPClCWDszSSxbX2BjYTJORE9RVjVMWkI4PzRTRURxcU0tV0ZGWVgqWzczUCdRWlxbYTFlNDo7TjpJN2RVSTo/amNGTiRCP0lqVj5dPj5CJUMpXjc3JHAkWGxiNGwsRCUiKkdwZClFXl5HX2o+cjttZ3M7WUx+PmVuZHN0cmVhbQplbmRvYmoKeHJlZgowIDExCjAwMDAwMDAwMDAgNjU1MzUgZiAKMDAwMDAwMDA2MSAwMDAwMCBuIAowMDAwMDAwMTAyIDAwMDAwIG4gCjAwMDAwMDAyMDkgMDAwMDAgbiAKMDAwMDAwMDMyMSAwMDAwMCBuIAowMDAwMDAwNTI0IDAwMDAwIG4gCjAwMDAwMDA3MjggMDAwMDAgbiAKMDAwMDAwMDc5NiAwMDAwMCBuIAowMDAwMDAxMDg3IDAwMDAwIG4gCjAwMDAwMDExNTIgMDAwMDAgbiAKMDAwMDAwMzQ1NSAwMDAwMCBuIAp0cmFpbGVyCjw8Ci9JRCAKWzxjMmMyNTAzYzdjNTY4Mzg3YzcxOWU5MjZkMzY4N2M3Nz48YzJjMjUwM2M3YzU2ODM4N2M3MTllOTI2ZDM2ODdjNzc+XQolIFJlcG9ydExhYiBnZW5lcmF0ZWQgUERGIGRvY3VtZW50IC0tIGRpZ2VzdCAob3BlbnNvdXJjZSkKCi9JbmZvIDcgMCBSCi9Sb290IDYgMCBSCi9TaXplIDExCj4+CnN0YXJ0eHJlZgozODQ2CiUlRU9GCg==</script>
+<script type="text/plain" id="guide-staffmanager"><!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Staff Timesheet Manager — How To</title>
+<style>
+  html,body{margin:0;padding:0;}
+  body{
+    font-family:"Segoe UI", -apple-system, BlinkMacSystemFont, sans-serif;
+    background:#f2f3f6;
+    color:#2b2e34;
+  }
+  .wrap{max-width:760px;margin:0 auto;padding:40px 24px 64px;}
+  header{
+    border-bottom:3px solid #1b2a52;
+    padding-bottom:16px;
+    margin-bottom:28px;
+  }
+  header h1{
+    font-size:26px;
+    margin:0 0 6px 0;
+    color:#1b2a52;
+  }
+  header p{margin:0;color:#6f7175;font-size:14px;}
+  h2{
+    font-size:16px;
+    color:#1b2a52;
+    margin:32px 0 10px 0;
+    padding-bottom:6px;
+    border-bottom:1px solid #dcdbd8;
+  }
+  p{line-height:1.6;font-size:14.5px;}
+  ol,ul{line-height:1.7;font-size:14.5px;padding-left:22px;}
+  li{margin-bottom:6px;}
+  .tag{
+    display:inline-block;
+    background:#eef2ff;
+    color:#1b2a52;
+    border:1px solid #c7cfe6;
+    border-radius:6px;
+    padding:1px 8px;
+    font-size:12.5px;
+    font-weight:700;
+    margin-right:4px;
+  }
+  .note{
+    background:#fff9e0;
+    border:1px solid #ffe58f;
+    border-radius:8px;
+    padding:12px 16px;
+    font-size:13.5px;
+    margin:16px 0;
+  }
+  .tab-list{
+    display:flex;
+    flex-wrap:wrap;
+    gap:8px;
+    margin:10px 0 4px 0;
+  }
+  .tab-list span{
+    background:#1b2a52;
+    color:#fff;
+    border-radius:16px;
+    padding:5px 14px;
+    font-size:12.5px;
+    font-weight:700;
+  }
+  @media print{ body{background:#fff;} }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <h1>Staff Timesheet Manager — How To</h1>
+    <p>TTP &amp; Sunshine Windows staff timesheets, holidays, overtime, deductions and payroll — synced to Supabase, so anyone with the tool open sees the same live data.</p>
+  </header>
+
+  <p>The tool is organised into seven tabs along the top:</p>
+  <div class="tab-list">
+    <span>🕐 Timesheets</span>
+    <span>🏖 Holidays</span>
+    <span>👥 Staff</span>
+    <span>⏰ Overtime</span>
+    <span>💷 Deductions</span>
+    <span>📧 Payroll Report</span>
+    <span>📊 Reports</span>
+  </div>
+
+  <h2>1. Timesheets tab</h2>
+  <ol>
+    <li>Set the week you're working on in <span class="tag">Week Setup</span>.</li>
+    <li>Use <span class="tag">Apply Preset to Timesheet</span> to pull in an employee's usual start/finish times and working days, rather than typing them out every week.</li>
+    <li>Each employee has their own block — expand it to edit daily start/finish times, add notes, and mark absences directly in the table.</li>
+    <li>Weekly totals calculate automatically at the bottom of each employee's table.</li>
+  </ol>
+
+  <h2>2. Holidays tab</h2>
+  <ol>
+    <li><span class="tag">Records by Employee</span> shows each person's holiday bookings and history.</li>
+    <li><span class="tag">Remaining Holiday By Employee</span> gives you a running balance so you can see entitlement left at a glance.</li>
+  </ol>
+
+  <h2>3. Staff tab</h2>
+  <p>Add, edit or remove staff records here — names, presets and any details used elsewhere in the tool.</p>
+
+  <h2>4. Overtime tab</h2>
+  <p>Log overtime hours against an employee and pay period; these feed into the monthly payroll summary automatically.</p>
+
+  <h2>5. Deductions tab</h2>
+  <ol>
+    <li><span class="tag">This Month's Deductions</span> — deductions due in the current pay period.</li>
+    <li><span class="tag">Outstanding Balances (Recurring)</span> — running total of any recurring deductions still being paid off (e.g. uniform, advances).</li>
+    <li><span class="tag">Full Deductions Register</span> — the complete history for reference.</li>
+  </ol>
+
+  <h2>6. Payroll Report tab</h2>
+  <ol>
+    <li><span class="tag">Monthly Payroll Summary</span> pulls everything together — hours, overtime, holiday and deductions — for the month.</li>
+    <li><span class="tag">Email Draft</span> gives you ready-to-copy text for sending the summary to Michelle.</li>
+    <li><span class="tag">Printable Payroll Summary</span> is a clean, print-friendly version of the month's figures.</li>
+  </ol>
+
+  <h2>7. Reports tab</h2>
+  <p>Additional breakdowns and summaries beyond the core payroll report — use this if you need to dig into figures for a specific employee or period.</p>
+
+  <div class="note">
+    <strong>Data is shared and live.</strong> Because everything syncs to Supabase, changes you make (or that a colleague makes) appear for everyone with the tool open — there's no separate "save" file to email round.
+  </div>
+
+</div>
+</body>
+</html>
+</script>
+<script type="text/plain" id="guide-utilities"><!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Meter Readings &amp; Bills — How To</title>
+<style>
+  html,body{margin:0;padding:0;}
+  body{
+    font-family:"Segoe UI", -apple-system, BlinkMacSystemFont, sans-serif;
+    background:#f2f3f6;
+    color:#2b2e34;
+  }
+  .wrap{max-width:760px;margin:0 auto;padding:40px 24px 64px;}
+  header{
+    border-bottom:3px solid #1b2a52;
+    padding-bottom:16px;
+    margin-bottom:28px;
+  }
+  header h1{
+    font-size:26px;
+    margin:0 0 6px 0;
+    color:#1b2a52;
+  }
+  header p{margin:0;color:#6f7175;font-size:14px;}
+  h2{
+    font-size:16px;
+    color:#1b2a52;
+    margin:32px 0 10px 0;
+    padding-bottom:6px;
+    border-bottom:1px solid #dcdbd8;
+  }
+  p{line-height:1.6;font-size:14.5px;}
+  ol,ul{line-height:1.7;font-size:14.5px;padding-left:22px;}
+  li{margin-bottom:6px;}
+  table{
+    width:100%;
+    border-collapse:collapse;
+    margin:10px 0 4px 0;
+    font-size:13.5px;
+  }
+  th,td{
+    text-align:left;
+    padding:8px 10px;
+    border-bottom:1px solid #dcdbd8;
+  }
+  th{
+    background:#1b2a52;
+    color:#fff;
+    font-size:12px;
+    text-transform:uppercase;
+    letter-spacing:.4px;
+  }
+  tr:nth-child(even) td{background:#fafbfc;}
+  .note{
+    background:#fff9e0;
+    border:1px solid #ffe58f;
+    border-radius:8px;
+    padding:12px 16px;
+    font-size:13.5px;
+    margin:16px 0;
+  }
+  @media print{ body{background:#fff;} }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <h1>Meter Readings &amp; Bills — How To</h1>
+    <p>One-click links to every gas, electric and water supplier portal for Units 3, 4 and 5&amp;6 — for submitting meter readings and viewing/downloading bills.</p>
+  </header>
+
+  <h2>1. Check the "next reading due" date</h2>
+  <p>At the top of the page is a banner showing when readings are next due. Click <strong>Edit</strong> to set or change the date — it's saved in the browser, so it stays put next time the tool is opened. Update it whenever the deadline changes.</p>
+
+  <h2>2. Choose the unit and fuel</h2>
+  <p>Each unit has its own Gas and Electric buttons, showing the supplier so you know which account you're heading to:</p>
+  <table>
+    <tr><th>Unit</th><th>Gas supplier</th><th>Electric supplier</th></tr>
+    <tr><td>Unit 3 — Tameside Trade Plastics</td><td>Smartest Energy</td><td>Eon Next</td></tr>
+    <tr><td>Unit 4 — Tameside Trade Plastics</td><td>British Gas Lite</td><td>Smartest Energy</td></tr>
+    <tr><td>Units 5&amp;6 — Sunshine Windows</td><td>YGP</td><td>Eon Next</td></tr>
+  </table>
+  <p>Clicking a button opens that supplier's login/dashboard in a new tab, where readings can be submitted and bills viewed or downloaded.</p>
+
+  <h2>3. Water</h2>
+  <p>All water accounts sit with the same supplier, Waterplus, so there's a single Water button covering every meter:</p>
+  <ul>
+    <li>Unit 3 — account 6001837398</li>
+    <li>Unit 4 — account 6002031330</li>
+    <li>Units 5&amp;6 — accounts 6001071307 &amp; 6001071341 (two meters)</li>
+  </ul>
+  <p>Once logged in to Waterplus, all four accounts are listed on the same dashboard.</p>
+
+  <div class="note">
+    <strong>Log in as usual.</strong> These buttons take you straight to each supplier's site — you'll still need to sign in with the existing account credentials to submit a reading or view a bill.
+  </div>
+
+</div>
+</body>
+</html>
+</script>
 <script type="text/plain" id="guide-whodoweowe">JVBERi0xLjMKJZOMi54gUmVwb3J0TGFiIEdlbmVyYXRlZCBQREYgZG9jdW1lbnQgKG9wZW5zb3VyY2UpCjEgMCBvYmoKPDwKL0YxIDIgMCBSIC9GMiAzIDAgUgo+PgplbmRvYmoKMiAwIG9iago8PAovQmFzZUZvbnQgL0hlbHZldGljYSAvRW5jb2RpbmcgL1dpbkFuc2lFbmNvZGluZyAvTmFtZSAvRjEgL1N1YnR5cGUgL1R5cGUxIC9UeXBlIC9Gb250Cj4+CmVuZG9iagozIDAgb2JqCjw8Ci9CYXNlRm9udCAvSGVsdmV0aWNhLUJvbGQgL0VuY29kaW5nIC9XaW5BbnNpRW5jb2RpbmcgL05hbWUgL0YyIC9TdWJ0eXBlIC9UeXBlMSAvVHlwZSAvRm9udAo+PgplbmRvYmoKNCAwIG9iago8PAovQ29udGVudHMgOCAwIFIgL01lZGlhQm94IFsgMCAwIDU5NS4yNzU2IDg0MS44ODk4IF0gL1BhcmVudCA3IDAgUiAvUmVzb3VyY2VzIDw8Ci9Gb250IDEgMCBSIC9Qcm9jU2V0IFsgL1BERiAvVGV4dCAvSW1hZ2VCIC9JbWFnZUMgL0ltYWdlSSBdCj4+IC9Sb3RhdGUgMCAvVHJhbnMgPDwKCj4+IAogIC9UeXBlIC9QYWdlCj4+CmVuZG9iago1IDAgb2JqCjw8Ci9QYWdlTW9kZSAvVXNlTm9uZSAvUGFnZXMgNyAwIFIgL1R5cGUgL0NhdGFsb2cKPj4KZW5kb2JqCjYgMCBvYmoKPDwKL0F1dGhvciAoYW5vbnltb3VzKSAvQ3JlYXRpb25EYXRlIChEOjIwMjYwNzMxMTMzOTEyKzAwJzAwJykgL0NyZWF0b3IgKGFub255bW91cykgL0tleXdvcmRzICgpIC9Nb2REYXRlIChEOjIwMjYwNzMxMTMzOTEyKzAwJzAwJykgL1Byb2R1Y2VyIChSZXBvcnRMYWIgUERGIExpYnJhcnkgLSBcKG9wZW5zb3VyY2VcKSkgCiAgL1N1YmplY3QgKHVuc3BlY2lmaWVkKSAvVGl0bGUgKHVudGl0bGVkKSAvVHJhcHBlZCAvRmFsc2UKPj4KZW5kb2JqCjcgMCBvYmoKPDwKL0NvdW50IDEgL0tpZHMgWyA0IDAgUiBdIC9UeXBlIC9QYWdlcwo+PgplbmRvYmoKOCAwIG9iago8PAovRmlsdGVyIFsgL0FTQ0lJODVEZWNvZGUgL0ZsYXRlRGVjb2RlIF0gL0xlbmd0aCAxNjU2Cj4+CnN0cmVhbQpHYXRVMzlsSyZNJkFANy5iYzA+TCozSHE+SEtgMTpHLlUjRCVOOTM1X2Q0MTpOayg5QEpZXzs4XlYyTGdBQkJaUSdGOTxDKC5GK0FEcyJfTkgvUlxTQjBWOyteYlVbQFQwO1trYU9mQCg6J2dZUT5pZlVBZ111MDVqKmo1WFw1QV5rK1pOb2ciXEFcaCY+dWUqSjltamw/TjlCRWEpT1owYl0yKV9LbVg5Qz88aHVucU5hTF8+JF4lJiVqLi85XFtvW09xIiJDTGpqZToycytMPTFBNys2Um5gJ11tYSllVDpgTFhcJTlcYWxBa0ovJFxePXUyZ1BdNFpPW0ghSTE+ZUIoIzA1JG06X3NYVElmKHBoMytVV1RFb0JcbUxbcT5lN1NlRzZmIVttQURGXGIiKF9TclxaYDNMK1hXSVs+WyRJXkk3RVhmPDNnOUEuJm9gT0VkQmUkcTZnbCYyXFlaPmUmUFEwVDYhZTUqYDEybV9MLEJrJkxHYXVIYDYxNExMMWJMUVtSKFp1REU+Z2slSjNxYV07QTxBZ1cvWkpcJzNBYmchP282KUljIWIjSzQ0TSNAPj89TVssJV1ZMyN1YUpcMzx1YVEkWXA5a3BBVCgtZTc4RHA2WXBlJyROaGVwMG0hb04mRD03cDtIZiY0TyhYKUc+OyFWVjA5PGoqIlZBK2BnK0tHQXEkajZkZ0xEXkZKYFdNN0VyNXBvMDZWc19oIUZMZ05VJHNpQGw0IidZbD49US1dYCZMNVhnJDVxOUJqL3BSJ2hOXVY7MURcPj9jcC8nNStRVicuT2pdWVVoUGxhXV43YG9JM2ZTVzk4Tyo3SXRSSyhFdURGMVVqO0tFRTNdcys3XypsLnUjWWBFRFkjaj8+NjxOc0RASFMiOihWUEdNPSIzNkFWTyc6M0NaVSdpZm90WWBFKF5eQk1DPExEQE1paWBvVW0jZyJJSEprbThBLFUpK2t0XW46Sz5Ma1U4M3M4KTtccClgbltydGg+RXAyJWJsXURebnJwJkByTmkwXW0oPm9cTzsrTCtbTTRlP0cyUDIwPTliP2c0TyIyZi04b1Q2WiRtTl4+VTghS0o0OGUrTilkOWNuOkQiI0hoMTYpJGdHdDFuNiI4KGZVaG05WFAsSi9AN0ssRDZZVjpIXkUtQz5cLTg1JyxqS3JoSDA6XCROKFxQaW9SZWk1W0hXOjFSZC1KM3FMNGdMUS9qQ2pHcGA9RzlIVTVrcVdGJ2c/IS1IY2dSUCVST19cXHIvZCtqQXJTZl9vNilobi0tWGRMJEpRMSxSJEFwIVJoRShjYitgQTwsQ0NgakwtZXIuW1k/WylJWTJpZzhmNUozY0k6W29AJGtJTFIhOUQ/RlFUVTNIMkxrMyRZXURXZjlmLXM+NS5UVVc7WUNlKXU/RlIpSkhUVDJVakhhQSRZJ0hST08zOC88Ryw5cmo3bV5tPCxLIVtzQnRUaVBeRzY9VyNWVUs8UjQ1KFVFK14ldUQvSzxDcmF0KnI4XVdRNnFDWF1tW2YhT0lDYHU9VlFFS1U4WmIyXlJHNEFAXGk4VGYkZyVYVWkoIlRKXUU1dFckL3FyL3A0dUtoWHFsTCxOTXJQLlUqXTtlWmxuLV1ZbWs0IiNhMUtYJiowYTQmOklzY3MlOGtTWmsvRiF1IkFPZCNrSW07PWZyWTsla2k7UVElOTMkRztSVlJIb0tob2hCMDpAQCVsRDlvIW9AOFlTZWdrc3JGYmlJISMxIS5Xck5RNjUjSl5KRCwrS0dNOWRuVXQuKHFHXC9pVChWcGxtUjNbM11IaSU5YENuVlFJVTB0ZGpdLE9JKW9dajVLTyZaK1EqVF4uM0U6Y2FgWGZZYWBxTSZiKWlAcycuLEc1Y0wjWmVaUGxhc004YEJQZ2U/TW9aaHNgZUorMGhQcFtfL1hrQSNGLnRUNyg+YjJNZWwtYlwlXi1lP0U+Zi47KmckbShRa0lNKyxedUtaJztHJDJaPlFHSUA1JGhTXiU/b2hRU1M7ZT1TWUdQdTEzRi8iKSRmaGw2Oy08Nls6PGUxMUJCUkdsVzJeaic3M0stWDxBbDs2VW0lQHU9TGdeIUJvZkQsL1MnKWJKOU9INkxGXERbNk5mQm1USi4nOWI1ZHRVNDBgVzNdNnNcNVZiOmVzUFs6aUVYYTspVj1SdTFYci5aVlheU0dgXEtcYiE8fj5lbmRzdHJlYW0KZW5kb2JqCnhyZWYKMCA5CjAwMDAwMDAwMDAgNjU1MzUgZiAKMDAwMDAwMDA2MSAwMDAwMCBuIAowMDAwMDAwMTAyIDAwMDAwIG4gCjAwMDAwMDAyMDkgMDAwMDAgbiAKMDAwMDAwMDMyMSAwMDAwMCBuIAowMDAwMDAwNTI0IDAwMDAwIG4gCjAwMDAwMDA1OTIgMDAwMDAgbiAKMDAwMDAwMDg1MyAwMDAwMCBuIAowMDAwMDAwOTEyIDAwMDAwIG4gCnRyYWlsZXIKPDwKL0lEIApbPDUzMWFhZmNiNTdiYWVhNzRlZTk4ZmY0YWE2ZGI2NzExPjw1MzFhYWZjYjU3YmFlYTc0ZWU5OGZmNGFhNmRiNjcxMT5dCiUgUmVwb3J0TGFiIGdlbmVyYXRlZCBQREYgZG9jdW1lbnQgLS0gZGlnZXN0IChvcGVuc291cmNlKQoKL0luZm8gNiAwIFIKL1Jvb3QgNSAwIFIKL1NpemUgOQo+PgpzdGFydHhyZWYKMjY1OQolJUVPRgo=</script>
+<script type="text/plain" id="guide-subinvoices"><!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Subcontractor Invoices — How To</title>
+<style>
+  html,body{margin:0;padding:0;}
+  body{
+    font-family:"Segoe UI", -apple-system, BlinkMacSystemFont, sans-serif;
+    background:#f2f3f6;
+    color:#2b2e34;
+  }
+  .wrap{max-width:760px;margin:0 auto;padding:40px 24px 64px;}
+  header{
+    border-bottom:3px solid #1b2a52;
+    padding-bottom:16px;
+    margin-bottom:28px;
+  }
+  header h1{
+    font-size:26px;
+    margin:0 0 6px 0;
+    color:#1b2a52;
+  }
+  header p{margin:0;color:#6f7175;font-size:14px;}
+  h2{
+    font-size:16px;
+    color:#1b2a52;
+    margin:32px 0 10px 0;
+    padding-bottom:6px;
+    border-bottom:1px solid #dcdbd8;
+  }
+  p{line-height:1.6;font-size:14.5px;}
+  ol,ul{line-height:1.7;font-size:14.5px;padding-left:22px;}
+  li{margin-bottom:6px;}
+  table{
+    width:100%;
+    border-collapse:collapse;
+    margin:10px 0 4px 0;
+    font-size:13.5px;
+  }
+  th,td{
+    text-align:left;
+    padding:8px 10px;
+    border-bottom:1px solid #dcdbd8;
+  }
+  th{
+    background:#1b2a52;
+    color:#fff;
+    font-size:12px;
+    text-transform:uppercase;
+    letter-spacing:.4px;
+  }
+  tr:nth-child(even) td{background:#fafbfc;}
+  .tag{
+    display:inline-block;
+    background:#e6f0fa;
+    color:#2c5282;
+    padding:2px 9px;
+    border-radius:12px;
+    font-size:12px;
+    font-weight:600;
+  }
+  .note{
+    background:#fff9e0;
+    border:1px solid #ffe58f;
+    border-radius:8px;
+    padding:12px 16px;
+    font-size:13.5px;
+    margin:16px 0;
+  }
+  @media print{ body{background:#fff;} }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <h1>Subcontractor Invoices — How To</h1>
+    <p>Create CIS invoices for window fitters and other subcontractors — day rate or per-product — with everyone's details saved for next time.</p>
+  </header>
+
+  <h2>1. Subcontractors tab</h2>
+  <p>Add each subcontractor once — name, address, email, UTR, National Insurance number, sort code, account number and bank name. You can also set a <strong>default rate type</strong> (Day Rate or Per Product) and a default day rate, so their invoices pre-fill next time.</p>
+  <p>Click <strong>Edit</strong> on any row to update their details, or delete them if they no longer work for you. Deleting a subcontractor doesn't remove their past invoices from History.</p>
+
+  <h2>2. New Invoice tab</h2>
+  <ol>
+    <li>Pick the subcontractor from the dropdown — their default rate type and day rate (if set) load automatically.</li>
+    <li>Check the invoice date and number. The invoice number suggests the next one on from the last invoice saved (e.g. SC165 → SC166) — you can overtype it if needed.</li>
+    <li>Choose <span class="tag">Day Rate</span> or <span class="tag">Per Product</span>:</li>
+  </ol>
+  <table>
+    <tr><th>Rate type</th><th>How it works</th></tr>
+    <tr><td>Day Rate</td><td>Enter days worked and rate per day — the amount calculates automatically (days × rate).</td></tr>
+    <tr><td>Per Product</td><td>Add a line for each job — a free-text description (e.g. "Bay Window", "Patio Door"), a quantity and a price. Add as many lines as needed with <strong>+ Add Line</strong>. Since pricing varies by subcontractor and job size, there's no fixed rate list — you set the price each time.</td></tr>
+  </table>
+  <p>CIS is deducted at 20% of the subtotal automatically, and the Total Due updates live as you type.</p>
+
+  <h2>3. Saving and printing</h2>
+  <p><strong>Save & Generate PDF</strong> stores the invoice and opens the printable version — use your browser's print dialog and choose "Save as PDF" to download it, exactly as with the sample invoices this was built from.</p>
+  <p><strong>Preview</strong> opens the invoice in a new tab without saving it, if you just want to check it first.</p>
+
+  <h2>4. Invoice History tab</h2>
+  <p>Every saved invoice is listed here, newest first, with a filter to show just one subcontractor. Click <strong>Reprint</strong> on any row to reopen and print that invoice again.</p>
+
+  <div class="note">
+    <strong>Data is shared and live.</strong> Subcontractors and invoices are saved to the same Supabase database as the Staff Timesheet Manager, so anyone with the tool open sees the same up-to-date list — there's no separate file to save or email round.
+  </div>
+
+</div>
+</body>
+</html>
+</script>
 <script>
 function openGuide(name){
   try{
     const el = document.getElementById('guide-' + name);
     if(!el){ alert('Guide not found for ' + name); return; }
-    const b64 = el.textContent.trim();
-    const byteChars = atob(b64);
-    const byteNumbers = new Array(byteChars.length);
-    for(let i = 0; i < byteChars.length; i++){ byteNumbers[i] = byteChars.charCodeAt(i); }
-    const byteArray = new Uint8Array(byteNumbers);
-    const blob = new Blob([byteArray], {type: 'application/pdf'});
+    const raw = el.textContent.trim();
+    let blob;
+    if(raw.startsWith('JVBERi0')){
+      // base64-encoded PDF guide (legacy format)
+      const byteChars = atob(raw);
+      const byteNumbers = new Array(byteChars.length);
+      for(let i = 0; i < byteChars.length; i++){ byteNumbers[i] = byteChars.charCodeAt(i); }
+      const byteArray = new Uint8Array(byteNumbers);
+      blob = new Blob([byteArray], {type: 'application/pdf'});
+    } else {
+      // plain HTML guide
+      blob = new Blob([raw], {type: 'text/html'});
+    }
     const url = URL.createObjectURL(blob);
     window.open(url, '_blank');
     setTimeout(() => URL.revokeObjectURL(url), 60000);
@@ -11419,13 +12600,28 @@ function openGuide(name){
 </script>
 
 <script>
-const IFRAME_TOOLS = ['guarantee', 'ebay', 'clientlist', 'payrolltools', 'whodoweowe', 'pettycash', 'staffmanager'];
+const IFRAME_TOOLS = ['guarantee', 'ebay', 'clientlist', 'payrolltools', 'whodoweowe', 'pettycash', 'staffmanager', 'subinvoices'];
 
 function switchPage(name){
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.getElementById('page-' + name).classList.add('active');
   document.getElementById('homeFloatBtn').style.display = (name === 'home') ? 'none' : 'inline-block';
   if (IFRAME_TOOLS.includes(name)) ensureIframeLoaded(name);
+  if (name === 'utilities') loadUtilDueDate();
+}
+
+function loadUtilDueDate(){
+  const val = localStorage.getItem('utilReadingDueDate');
+  document.getElementById('utilDueDateDisplay').textContent = val || 'Not set — click Edit to add';
+}
+
+function editUtilDueDate(){
+  const current = localStorage.getItem('utilReadingDueDate') || '';
+  const val = prompt('Enter the date meter readings are next due (e.g. 10 Aug 2026):', current);
+  if(val !== null){
+    localStorage.setItem('utilReadingDueDate', val.trim());
+    loadUtilDueDate();
+  }
 }
 
 function ensureIframeLoaded(name){
