@@ -6099,6 +6099,7 @@ loadRoster();
 <title>Who Do We Owe</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"><\/script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"><\/script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"><\/script>
 <style>
   :root{
     --accent:#FF2D16;
@@ -6348,13 +6349,62 @@ loadRoster();
     color:var(--ink);
   }
   .print-btn:hover{background:var(--ink);color:#fff;}
+  #markSelectedPaidBtn, #createPaymentBtn{border-color:var(--good);color:var(--good);}
+  #markSelectedPaidBtn:hover, #createPaymentBtn:hover{background:var(--good);color:#fff;}
+  .pay-cancel-btn{
+    border:1px solid var(--line);
+    background:#fff;
+    color:var(--muted);
+    border-radius:6px;
+    padding:4px 9px;
+    cursor:pointer;
+    font-size:13px;
+    font-family:inherit;
+  }
+  .pay-cancel-btn:hover{border-color:var(--bad);color:var(--bad);}
+
+  .page-nav{display:flex;gap:10px;margin-bottom:20px;}
+  .page-nav-btn{
+    padding:10px 22px;
+    border-radius:8px;
+    border:1px solid var(--line);
+    background:#fff;
+    color:var(--muted);
+    font-weight:600;
+    font-size:14px;
+    cursor:pointer;
+    font-family:inherit;
+  }
+  .page-nav-btn:hover{background:#FAFAFA;}
+  .page-nav-btn.active{background:var(--ink);color:#fff;border-color:var(--ink);}
+
+  tbody tr.pay-row{border-bottom:1px solid var(--line);}
+  tbody tr.pay-row.group-b{background:#FBFBFC;}
+  tbody tr.pay-row.is-paid{opacity:.55;}
+  tbody tr.pay-row.is-paid td:not(:last-child){text-decoration:line-through;}
+  tbody tr.pay-row.expandable{cursor:pointer;}
+  tbody tr.pay-row.expandable:hover{background:#FAFAFA;}
+
+  .pay-status-btn{
+    padding:6px 14px;
+    border-radius:20px;
+    border:1px solid var(--line);
+    font-size:12px;
+    font-weight:600;
+    cursor:pointer;
+    white-space:nowrap;
+    font-family:inherit;
+  }
+  .pay-status-btn.unpaid{border-color:var(--bad);color:var(--bad);background:var(--bad-bg);}
+  .pay-status-btn.paid{border-color:var(--good);color:#fff;background:var(--good);}
+  .pay-status-btn:hover{opacity:.85;}
 
   .print-header{display:none;}
 
   @media print{
     @page{ size: landscape; margin: 12mm; }
     body{background:#fff;}
-    header, .accent-bar, .upload-zone, .controls, footer, #initialEmpty, .bucket-tabs{display:none !important;}
+    header, .accent-bar, .upload-zone, .controls, footer, #initialEmpty, .bucket-tabs, .page-nav{display:none !important;}
     .print-header{
       display:block;
       margin-bottom:14px;
@@ -6386,6 +6436,13 @@ loadRoster();
 <div class="accent-bar"></div>
 
 <main>
+
+  <div class="page-nav">
+    <button class="page-nav-btn active" id="navOwedBtn">Who Do We Owe</button>
+    <button class="page-nav-btn" id="navPaymentsBtn">Payments Raised</button>
+  </div>
+
+  <div id="page-owed">
 
   <div class="upload-zone" id="dropZone">
     <input type="file" id="fileInput" accept=".csv,.xlsx,.xls">
@@ -6446,6 +6503,14 @@ loadRoster();
       <div class="print-btn" id="printBtn">🖨 Print</div>
     </div>
 
+    <div class="controls" id="createPaymentBar" style="display:none;">
+      <span id="createPaymentInfo" style="font-size:13px;color:var(--muted);font-weight:600;"></span>
+      <div class="print-btn" id="createPaymentBtn">Create Payment</div>
+      <div class="print-btn" id="clearBillSelectionBtn">Clear selection</div>
+    </div>
+
+    <div id="billsLoadError" style="display:none;background:var(--bad-bg);color:var(--bad);border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:13px;"></div>
+
     <table>
       <thead>
         <tr>
@@ -6471,14 +6536,110 @@ loadRoster();
     <div>In Xero: Business → Bills to pay → Export, or the Bills CSV/Excel export for the entity.</div>
   </div>
 
+  </div><!-- /page-owed -->
+
+  <div id="page-payments" style="display:none;">
+
+    <div class="summary-grid" style="grid-template-columns:repeat(3,1fr);">
+      <div class="summary-card overdue">
+        <div class="label">Unpaid</div>
+        <div class="value" id="paySumUnpaid">£0.00</div>
+      </div>
+      <div class="summary-card">
+        <div class="label">Paid</div>
+        <div class="value" id="paySumPaid">£0.00</div>
+      </div>
+      <div class="summary-card">
+        <div class="label">Payments</div>
+        <div class="value" id="paySumCount">0</div>
+      </div>
+    </div>
+
+    <div id="paymentsLoadError" style="display:none;background:var(--bad-bg);color:var(--bad);border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:13px;"></div>
+
+    <div class="controls">
+      <label class="date-label">Date from <input type="date" id="paymentsDateFrom"></label>
+      <label class="date-label">to <input type="date" id="paymentsDateTo"></label>
+      <div class="print-btn" id="paymentsDateAllBtn">Full range</div>
+    </div>
+
+    <div class="controls">
+      <input type="text" id="paySearchBox" placeholder="Search company...">
+      <select id="paySortSelect">
+        <option value="date_desc">Sort: Date (newest first)</option>
+        <option value="company_asc">Sort: Company (A–Z)</option>
+        <option value="amount_desc">Sort: Amount (high–low)</option>
+      </select>
+      <div class="print-btn" id="paymentsRefreshBtn">↻ Refresh</div>
+    </div>
+
+    <div class="controls" id="paymentsBulkBar" style="display:none;">
+      <span id="paymentsSelectedInfo" style="font-size:13px;color:var(--muted);font-weight:600;"></span>
+      <div class="print-btn" id="markSelectedPaidBtn">Mark selected Paid</div>
+      <div class="print-btn" id="markSelectedUnpaidBtn">Mark selected Unpaid</div>
+      <div class="print-btn" id="clearSelectionBtn">Clear selection</div>
+    </div>
+
+    <table>
+      <thead>
+        <tr>
+          <th style="width:36px;"><input type="checkbox" id="paySelectAllCheckbox" title="Select all visible"></th>
+          <th style="width:28%;">Company</th>
+          <th>Invoice / Reference</th>
+          <th>Date</th>
+          <th>Amount</th>
+          <th style="width:120px;">Status</th>
+          <th style="width:40px;"></th>
+        </tr>
+      </thead>
+      <tbody id="paymentsTableBody"></tbody>
+    </table>
+
+    <div class="empty-state" id="paymentsNoResults" style="display:none;">
+      <h3>No payments raised yet</h3>
+      <div>Select invoices in "Who Do We Owe" and click Create Payment — or import historical paid bills below.</div>
+    </div>
+
+    <details style="margin-top:28px;">
+      <summary style="cursor:pointer;font-weight:600;color:var(--muted);font-size:13px;">Import historical Paid Bills (one-time backfill)</summary>
+      <div class="upload-zone" id="paymentsDropZone" style="margin-top:14px;">
+        <input type="file" id="paymentsFileInput" accept=".csv,.xlsx,.xls">
+        <label for="paymentsFileInput">Choose file</label>
+        <div class="hint">Xero Paid Bills export (CSV or Excel) — each row imports as an already-paid payment</div>
+        <div id="paymentsFileName"></div>
+      </div>
+    </details>
+
+  </div><!-- /page-payments -->
+
 </main>
 
 <footer>Who Do We Owe — Sunshine Windows / Tameside Trade Plastics / Mallard &amp; McKellar</footer>
 
 <script>
+const SUPABASE_URL = 'https://xwkmwazkmovnonbocpom.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_7DxxdwH6NcOqpj6OhKZXAg_5HaJlrWQ';
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
 let supplierData = [];
 let expandedSet = new Set();
 let currentBucketTab = 'full'; // 'full' | 'overdue' | 'due7' | 'due14'
+let selectedBills = new Map(); // billKey -> {company, invoiceNumber, reference, dueDate, amount} - queued for "Create Payment"
+
+let raisedPayments = []; // [{id, date(createdAt), paidAt, status, items:[{id, company, invoiceNumber, reference, dueDate, amount}]}]
+let raisedItemsIndex = new Map(); // billKey -> {paymentId, status} - which Bills-Owed invoices already have a payment raised
+let selectedPayments = new Set(); // payment ids selected for bulk mark paid/unpaid in Payments Raised
+let expandedPayments = new Set(); // payment ids currently expanded in Payments Raised
+
+// Canonical key used to match an invoice in Who Do We Owe to a payment_item
+// raised against it in Supabase - same function used on both sides so the
+// two never drift out of sync with each other.
+function billKey(company, invoiceOrRef){
+  return (company || '').trim().toLowerCase() + '||' + (invoiceOrRef || '').trim().toLowerCase();
+}
+function escapeAttr(s){
+  return String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
 
 function parseAmount(v){
   if(v === null || v === undefined) return 0;
@@ -6495,6 +6656,17 @@ function parseUKDate(v){
   let [d,m,y] = parts.map(x=>parseInt(x,10));
   if(y < 100) y += 2000;
   if(!d || !m || !y) return null;
+  const dt = new Date(Date.UTC(y, m-1, d));
+  return isNaN(dt.getTime()) ? null : dt;
+}
+
+// Supabase/Postgres date columns come back as "YYYY-MM-DD".
+function parseISODate(v){
+  if(!v) return null;
+  const parts = String(v).split('-');
+  if(parts.length !== 3) return null;
+  const [y,m,d] = parts.map(x=>parseInt(x,10));
+  if(!y || !m || !d) return null;
   const dt = new Date(Date.UTC(y, m-1, d));
   return isNaN(dt.getTime()) ? null : dt;
 }
@@ -6536,7 +6708,11 @@ function toDateInputValue(dt){
 // Classifies a single invoice into exactly one non-overlapping bucket, based on
 // days between today and its due date. Credit notes/overpayments (amountDue <= 0)
 // never count as something owing, so they never land in a due-date bucket.
+// Invoices that already have a payment raised against them are also excluded -
+// they've already been actioned, so they drop out of Overdue/Due-soon views
+// (they still show in Full Breakdown with a "Payment Raised" badge).
 function bucketOf(inv, today){
+  if(inv.raised) return 'other';
   if(!inv.dueDate || inv.amountDue <= 0) return 'other';
   const days = Math.round((inv.dueDate.getTime() - today.getTime()) / 86400000);
   if(days < 0) return 'overdue';
@@ -6576,6 +6752,7 @@ function getSuppliersForDateRange(fromDate, toDate){
   const list = [];
   supplierData.forEach(s => {
     const invoices = s.invoices.filter(inv => {
+      if(inv.raised) return false;
       if(!inv.dueDate || inv.amountDue <= 0) return false;
       return inv.dueDate >= fromDate && inv.dueDate <= toDate;
     });
@@ -6619,6 +6796,7 @@ function processRows(rows){
     const amountDue = parseAmount(r.InvoiceAmountDue);
     const total = parseAmount(r.Total);
     const isOverdue = !!(dueDate && dueDate < today && amountDue > 0);
+    const raisedInfo = raisedItemsIndex.get(billKey(supplierName, r.InvoiceNumber || r.Reference)) || null;
 
     if(!suppliers.has(supplierName)){
       suppliers.set(supplierName, {
@@ -6630,12 +6808,17 @@ function processRows(rows){
       });
     }
     const s = suppliers.get(supplierName);
-    s.totalOwed += amountDue;
-    if(isOverdue) s.overdueAmount += amountDue;
-    if(dueDate && amountDue !== 0){
-      if(!s.oldestDue || dueDate < s.oldestDue) s.oldestDue = dueDate;
+    // A raised payment means this invoice has already been actioned - leave it
+    // out of the owed/overdue totals (it still shows in the list with a badge).
+    if(!raisedInfo){
+      s.totalOwed += amountDue;
+      if(isOverdue) s.overdueAmount += amountDue;
+      if(dueDate && amountDue !== 0){
+        if(!s.oldestDue || dueDate < s.oldestDue) s.oldestDue = dueDate;
+      }
     }
     s.invoices.push({
+      company: supplierName,
       invoiceNumber: r.InvoiceNumber,
       reference: r.Reference || '',
       type: r.Type || 'Bill',
@@ -6643,7 +6826,8 @@ function processRows(rows){
       dueDate: dueDate,
       total: total,
       amountDue: amountDue,
-      overdue: isOverdue
+      overdue: isOverdue,
+      raised: raisedInfo
     });
   });
 
@@ -6656,6 +6840,27 @@ function processRows(rows){
   });
 
   return Array.from(suppliers.values());
+}
+
+// Re-tags already-parsed supplierData against the current raisedItemsIndex and
+// recomputes totals, without needing to re-upload/re-parse the Bills CSV.
+// Called after creating, cancelling, or updating a payment.
+function reapplyRaisedStatus(){
+  supplierData.forEach(s => {
+    s.totalOwed = 0;
+    s.overdueAmount = 0;
+    s.oldestDue = null;
+    s.invoices.forEach(inv => {
+      inv.raised = raisedItemsIndex.get(billKey(inv.company, inv.invoiceNumber || inv.reference)) || null;
+      if(!inv.raised){
+        s.totalOwed += inv.amountDue;
+        if(inv.overdue) s.overdueAmount += inv.amountDue;
+        if(inv.dueDate && inv.amountDue !== 0){
+          if(!s.oldestDue || inv.dueDate < s.oldestDue) s.oldestDue = inv.dueDate;
+        }
+      }
+    });
+  });
 }
 
 function renderSummary(list){
@@ -6738,6 +6943,15 @@ function refreshBucketTabs(){
   document.getElementById('dateRangeControls').style.display = (currentBucketTab === 'daterange') ? 'flex' : 'none';
 }
 
+function updateCreatePaymentBar(){
+  const bar = document.getElementById('createPaymentBar');
+  if(!selectedBills.size){ bar.style.display = 'none'; return; }
+  bar.style.display = 'flex';
+  const total = Array.from(selectedBills.values()).reduce((sum,b) => sum + b.amount, 0);
+  document.getElementById('createPaymentInfo').textContent =
+    selectedBills.size + ' invoice' + (selectedBills.size===1?'':'s') + ' selected  •  ' + fmtMoney(total);
+}
+
 function render(){
   refreshBucketTabs();
 
@@ -6775,42 +6989,68 @@ function render(){
 
       const isPrinting = document.body.classList.contains('is-printing');
       const invoicesForDisplay = (isPrinting && currentBucketTab === 'full' && overdueOnly())
-        ? s.invoices.filter(inv => inv.overdue)
+        ? s.invoices.filter(inv => inv.overdue && !inv.raised)
         : s.invoices;
 
-      let rows = invoicesForDisplay.map(inv => `
+      let rows = invoicesForDisplay.map(inv => {
+        const key = billKey(inv.company, inv.invoiceNumber || inv.reference);
+        const checkboxCell = inv.raised
+          ? ''
+          : `<input type="checkbox" class="bill-select-checkbox" data-key="${escapeAttr(key)}">`;
+        const statusCell = inv.raised
+          ? `<span class="badge ${inv.raised.status === 'paid' ? 'ok' : 'duesoon'}">${inv.raised.status === 'paid' ? 'Payment Raised • Paid' : 'Payment Raised'}</span>`
+          : (inv.overdue ? '<span class="badge overdue">Overdue</span>' : (inv.dueDate ? '<span class="badge ok">OK</span>' : '<span class="badge none">—</span>'));
+        return `
         <tr>
+          <td style="width:30px;">${checkboxCell}</td>
           <td>${inv.invoiceNumber || '—'}<div class="type-tag">${inv.type}</div></td>
           <td>${inv.reference || '—'}</td>
           <td>${fmtDate(inv.invoiceDate)}</td>
           <td>${fmtDate(inv.dueDate)}</td>
           <td class="amount ${inv.total<0?'negative':''}">${fmtMoney(inv.total)}</td>
           <td class="amount ${inv.amountDue<0?'negative':''}">${fmtMoney(inv.amountDue)}</td>
-          <td>${inv.overdue ? '<span class="badge overdue">Overdue</span>' : (inv.dueDate ? '<span class="badge ok">OK</span>' : '<span class="badge none">—</span>')}</td>
+          <td>${statusCell}</td>
           <td class="notes-cell"><div class="notes-line"></div></td>
         </tr>
-      `).join('');
+      `;
+      }).join('');
       td.innerHTML = `
         <div class="detail-wrap">
           <table class="detail-table">
             <thead>
               <tr>
-                <th>Invoice</th><th>Reference</th><th>Invoice Date</th><th>Due Date</th><th>Total</th><th>Amount Due</th><th></th><th>Notes</th>
+                <th style="width:30px;"></th><th>Invoice</th><th>Reference</th><th>Invoice Date</th><th>Due Date</th><th>Total</th><th>Amount Due</th><th></th><th>Notes</th>
               </tr>
             </thead>
             <tbody>${rows}</tbody>
           </table>
         </div>
       `;
+      td.querySelectorAll('.bill-select-checkbox').forEach(cb => {
+        const key = cb.dataset.key;
+        cb.checked = selectedBills.has(key);
+        cb.addEventListener('click', (e) => e.stopPropagation());
+        cb.addEventListener('change', (e) => {
+          if(e.target.checked){
+            const inv = invoicesForDisplay.find(x => billKey(x.company, x.invoiceNumber || x.reference) === key);
+            if(inv) selectedBills.set(key, { company: inv.company, invoiceNumber: inv.invoiceNumber || '', reference: inv.reference || '', dueDate: inv.dueDate, amount: inv.amountDue });
+          } else {
+            selectedBills.delete(key);
+          }
+          updateCreatePaymentBar();
+        });
+      });
       detailRow.appendChild(td);
       tbody.appendChild(detailRow);
     }
   });
 }
 
-function handleFile(file){
+async function handleFile(file){
   const name = file.name.toLowerCase();
   document.getElementById('fileName').textContent = 'Loaded: ' + file.name;
+  selectedBills.clear();
+  await refreshRaisedPayments();
 
   if(name.endsWith('.csv')){
     Papa.parse(file, {
@@ -6926,6 +7166,536 @@ document.getElementById('dateRangeTodayBtn').addEventListener('click', () => {
   setDefaultDateRange();
   render();
 });
+
+document.getElementById('clearBillSelectionBtn').addEventListener('click', () => {
+  selectedBills.clear();
+  render();
+});
+
+document.getElementById('createPaymentBtn').addEventListener('click', async () => {
+  if(!selectedBills.size) return;
+  const items = Array.from(selectedBills.values());
+  const total = items.reduce((sum,b) => sum + b.amount, 0);
+  const btn = document.getElementById('createPaymentBtn');
+  const originalText = btn.textContent;
+  btn.textContent = 'Creating…';
+  document.getElementById('billsLoadError').style.display = 'none';
+  try{
+    const { data: paymentRow, error: payErr } = await sb.from('wdwo_payments').insert({ status: 'unpaid' }).select().single();
+    if(payErr) throw payErr;
+
+    const itemRows = items.map(it => ({
+      payment_id: paymentRow.id,
+      company: it.company,
+      invoice_number: it.invoiceNumber || null,
+      reference: it.reference || null,
+      due_date: it.dueDate ? toDateInputValue(it.dueDate) : null,
+      amount: it.amount
+    }));
+    const { error: itemsErr } = await sb.from('wdwo_payment_items').insert(itemRows);
+    if(itemsErr) throw itemsErr;
+
+    selectedBills.clear();
+    await refreshRaisedPayments();
+    reapplyRaisedStatus();
+    render();
+    renderPayments();
+    alert('Payment raised for ' + items.length + ' invoice' + (items.length===1?'':'s') + ', total ' + fmtMoney(total) + '. It now shows in Payments Raised.');
+  } catch(err){
+    console.error(err);
+    const msg = 'Could not create the payment — ' + (err && err.message ? err.message : 'unknown error') + '. Nothing was changed.';
+    const banner = document.getElementById('billsLoadError');
+    banner.textContent = msg;
+    banner.style.display = 'block';
+  } finally {
+    btn.textContent = originalText;
+  }
+});
+
+/* ---------- Payments Raised tab (Supabase-backed) ---------- */
+
+function paymentAmount(p){
+  return p.items.reduce((sum,it) => sum + it.amount, 0);
+}
+function paymentCompanyLabel(p){
+  const companies = Array.from(new Set(p.items.map(it => it.company)));
+  return companies.length === 1 ? companies[0] : 'Multiple suppliers';
+}
+function paymentEffectiveDate(p){
+  return p.paidAt || p.date;
+}
+
+// Pulls the current state of every payment (and its invoices) from Supabase.
+// This is the single source of truth for Payments Raised, and also feeds
+// raisedItemsIndex, which Who Do We Owe uses to badge/exclude invoices that
+// already have a payment against them.
+async function refreshRaisedPayments(){
+  try{
+    const { data, error } = await sb
+      .from('wdwo_payments')
+      .select('id, created_at, status, paid_at, wdwo_payment_items(id, company, invoice_number, reference, due_date, amount)')
+      .order('created_at', { ascending: false });
+    if(error) throw error;
+
+    raisedPayments = (data || []).map(p => ({
+      id: p.id,
+      date: p.created_at ? new Date(p.created_at) : null,
+      paidAt: p.paid_at ? new Date(p.paid_at) : null,
+      status: p.status,
+      items: (p.wdwo_payment_items || []).map(it => ({
+        id: it.id,
+        company: it.company,
+        invoiceNumber: it.invoice_number || '',
+        reference: it.reference || '',
+        dueDate: it.due_date ? parseISODate(it.due_date) : null,
+        amount: Number(it.amount)
+      }))
+    }));
+
+    raisedItemsIndex = new Map();
+    raisedPayments.forEach(p => {
+      p.items.forEach(it => {
+        raisedItemsIndex.set(billKey(it.company, it.invoiceNumber || it.reference), { paymentId: p.id, status: p.status });
+      });
+    });
+
+    document.getElementById('paymentsLoadError').style.display = 'none';
+    return true;
+  } catch(err){
+    console.error('Could not load payments from Supabase', err);
+    const banner = document.getElementById('paymentsLoadError');
+    banner.textContent = 'Could not connect to the payments database — ' + (err && err.message ? err.message : 'unknown error') + '. Check the Supabase tables exist and try Refresh.';
+    banner.style.display = 'block';
+    return false;
+  }
+}
+
+// Sets the date range inputs to span the earliest-to-latest effective date
+// (paid date if paid, otherwise date raised) across all loaded payments.
+function setDefaultPaymentsDateRange(){
+  const dated = raisedPayments.filter(p => paymentEffectiveDate(p));
+  if(!dated.length){
+    document.getElementById('paymentsDateFrom').value = '';
+    document.getElementById('paymentsDateTo').value = '';
+    return;
+  }
+  let min = paymentEffectiveDate(dated[0]), max = paymentEffectiveDate(dated[0]);
+  dated.forEach(p => {
+    const d = paymentEffectiveDate(p);
+    if(d < min) min = d;
+    if(d > max) max = d;
+  });
+  document.getElementById('paymentsDateFrom').value = toDateInputValue(min);
+  document.getElementById('paymentsDateTo').value = toDateInputValue(max);
+}
+
+function paySearchTerm(){ return document.getElementById('paySearchBox').value.trim().toLowerCase(); }
+function paySort(){ return document.getElementById('paySortSelect').value; }
+
+function getFilteredSortedPayments(){
+  let list = raisedPayments.slice();
+
+  const from = parseDateInputValue(document.getElementById('paymentsDateFrom').value);
+  const to = parseDateInputValue(document.getElementById('paymentsDateTo').value);
+  if(from || to){
+    list = list.filter(p => {
+      const d = paymentEffectiveDate(p);
+      if(!d) return true; // no date on file - nothing to filter it by, always shown
+      if(from && d < from) return false;
+      if(to && d > to) return false;
+      return true;
+    });
+  }
+
+  const term = paySearchTerm();
+  if(term) list = list.filter(p => p.items.some(it => it.company.toLowerCase().includes(term)));
+
+  const sort = paySort();
+  if(sort === 'amount_desc'){
+    list.sort((a,b) => paymentAmount(b) - paymentAmount(a));
+  } else if(sort === 'company_asc'){
+    list.sort((a,b) => paymentCompanyLabel(a).localeCompare(paymentCompanyLabel(b)));
+  } else {
+    list.sort((a,b) => {
+      const da = paymentEffectiveDate(a) ? paymentEffectiveDate(a).getTime() : 0;
+      const db = paymentEffectiveDate(b) ? paymentEffectiveDate(b).getTime() : 0;
+      return db - da;
+    });
+  }
+  return list;
+}
+
+function renderPaymentsSummary(){
+  const unpaid = raisedPayments.filter(p => p.status === 'unpaid').reduce((sum,p) => sum + paymentAmount(p), 0);
+  const paid = raisedPayments.filter(p => p.status === 'paid').reduce((sum,p) => sum + paymentAmount(p), 0);
+  document.getElementById('paySumUnpaid').textContent = fmtMoney(unpaid);
+  document.getElementById('paySumPaid').textContent = fmtMoney(paid);
+  document.getElementById('paySumCount').textContent = raisedPayments.length;
+}
+
+function renderPaymentsBulkBar(list){
+  const bar = document.getElementById('paymentsBulkBar');
+  const visibleIds = new Set(list.map(p => p.id));
+  Array.from(selectedPayments).forEach(id => { if(!visibleIds.has(id)) selectedPayments.delete(id); });
+
+  if(!selectedPayments.size){
+    bar.style.display = 'none';
+    return;
+  }
+  bar.style.display = 'flex';
+  const selectedRows = raisedPayments.filter(p => selectedPayments.has(p.id));
+  const total = selectedRows.reduce((sum,p) => sum + paymentAmount(p), 0);
+  document.getElementById('paymentsSelectedInfo').textContent =
+    selectedRows.length + ' selected  •  ' + fmtMoney(total);
+}
+
+function renderPayments(){
+  renderPaymentsSummary();
+
+  const list = getFilteredSortedPayments();
+  renderPaymentsBulkBar(list);
+
+  const tbody = document.getElementById('paymentsTableBody');
+  tbody.innerHTML = '';
+  document.getElementById('paymentsNoResults').style.display = list.length ? 'none' : 'block';
+
+  const selectAllBox = document.getElementById('paySelectAllCheckbox');
+  selectAllBox.checked = list.length > 0 && list.every(p => selectedPayments.has(p.id));
+
+  let lastCompany = null;
+  let groupToggle = false;
+  list.forEach(p => {
+    const companyLabel = paymentCompanyLabel(p);
+    if(companyLabel !== lastCompany){
+      groupToggle = !groupToggle;
+      lastCompany = companyLabel;
+    }
+    const amount = paymentAmount(p);
+    const hasMultiple = p.items.length > 1;
+    const isOpen = hasMultiple && expandedPayments.has(p.id);
+
+    let companyCellHTML, refCellHTML;
+    if(hasMultiple){
+      companyCellHTML = `<span class="chev ${isOpen?'open':''}">▶</span>${companyLabel}`;
+      refCellHTML = `Multiple invoices<div class="type-tag">${p.items.length} invoices</div>`;
+    } else {
+      const inv = p.items[0];
+      companyCellHTML = companyLabel;
+      refCellHTML = inv ? (inv.invoiceNumber || inv.reference || '—') : '—';
+    }
+
+    const row = document.createElement('tr');
+    row.className = 'pay-row ' + (groupToggle ? 'group-a' : 'group-b') + (p.status === 'paid' ? ' is-paid' : '') + (hasMultiple ? ' expandable' : '');
+    row.innerHTML = `
+      <td><input type="checkbox" class="pay-select-checkbox" ${selectedPayments.has(p.id) ? 'checked' : ''}></td>
+      <td>${companyCellHTML}</td>
+      <td>${refCellHTML}</td>
+      <td>${fmtDate(paymentEffectiveDate(p))}</td>
+      <td class="amount ${amount<0?'negative':''}">${fmtMoney(amount)}</td>
+      <td><button class="pay-status-btn ${p.status}">${p.status === 'paid' ? '✓ Paid' : 'Unpaid'}</button></td>
+      <td>${p.status === 'unpaid' ? '<button class="pay-cancel-btn" title="Cancel this payment">✕</button>' : ''}</td>
+    `;
+    row.querySelector('.pay-select-checkbox').addEventListener('change', (e) => {
+      if(e.target.checked) selectedPayments.add(p.id);
+      else selectedPayments.delete(p.id);
+      renderPayments();
+    });
+    row.querySelector('.pay-status-btn').addEventListener('click', async (e) => {
+      e.stopPropagation();
+      await setPaymentStatus(p.id, p.status === 'paid' ? 'unpaid' : 'paid');
+    });
+    const cancelBtn = row.querySelector('.pay-cancel-btn');
+    if(cancelBtn){
+      cancelBtn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        if(!confirm('Cancel this payment and put its invoice(s) back into Who Do We Owe as unpaid?')) return;
+        await cancelPayment(p.id);
+      });
+    }
+    if(hasMultiple){
+      row.addEventListener('click', (e) => {
+        if(e.target.closest('.pay-select-checkbox, .pay-status-btn, .pay-cancel-btn')) return;
+        if(expandedPayments.has(p.id)) expandedPayments.delete(p.id);
+        else expandedPayments.add(p.id);
+        renderPayments();
+      });
+    }
+    tbody.appendChild(row);
+
+    if(isOpen){
+      const detailRow = document.createElement('tr');
+      detailRow.className = 'detail-row';
+      const td = document.createElement('td');
+      td.colSpan = 7;
+      const rows = p.items.map(inv => `
+        <tr>
+          <td>${inv.company}</td>
+          <td>${inv.invoiceNumber || inv.reference || '—'}</td>
+          <td>${fmtDate(inv.dueDate)}</td>
+          <td class="amount ${inv.amount<0?'negative':''}">${fmtMoney(inv.amount)}</td>
+        </tr>
+      `).join('');
+      td.innerHTML = `
+        <div class="detail-wrap">
+          <table class="detail-table">
+            <thead>
+              <tr><th>Company</th><th>Invoice</th><th>Due Date</th><th>Amount</th></tr>
+            </thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </div>
+      `;
+      detailRow.appendChild(td);
+      tbody.appendChild(detailRow);
+    }
+  });
+}
+
+async function setPaymentStatus(id, status){
+  try{
+    const { error } = await sb.from('wdwo_payments')
+      .update({ status: status, paid_at: status === 'paid' ? new Date().toISOString() : null })
+      .eq('id', id);
+    if(error) throw error;
+    await refreshRaisedPayments();
+    reapplyRaisedStatus();
+    render();
+    renderPayments();
+  } catch(err){
+    alert('Could not update that payment — ' + (err && err.message ? err.message : 'unknown error') + '.');
+  }
+}
+
+async function cancelPayment(id){
+  try{
+    const { error } = await sb.from('wdwo_payments').delete().eq('id', id);
+    if(error) throw error;
+    selectedPayments.delete(id);
+    expandedPayments.delete(id);
+    await refreshRaisedPayments();
+    reapplyRaisedStatus();
+    render();
+    renderPayments();
+  } catch(err){
+    alert('Could not cancel that payment — ' + (err && err.message ? err.message : 'unknown error') + '.');
+  }
+}
+
+/* ----- Historical Paid Bills import: bulk-creates already-paid payments ----- */
+
+function parseFileToRows(file){
+  return new Promise((resolve, reject) => {
+    const name = file.name.toLowerCase();
+    if(name.endsWith('.csv')){
+      Papa.parse(file, {
+        header: true,
+        skipEmptyLines: true,
+        complete: (results) => resolve(results.data),
+        error: reject
+      });
+    } else {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try{
+          const wb = XLSX.read(e.target.result, {type:'array', cellDates:false});
+          const ws = wb.Sheets[wb.SheetNames[0]];
+          resolve(XLSX.utils.sheet_to_json(ws, {defval:''}));
+        } catch(err){ reject(err); }
+      };
+      reader.onerror = reject;
+      reader.readAsArrayBuffer(file);
+    }
+  });
+}
+
+// Same dedupe idea as processRows: one row per invoice, "Paid" status only,
+// zero-value lines dropped. Each surviving row becomes its own historical
+// payment (kept one-per-invoice deliberately - see the note in the chat about
+// why date-based auto-grouping doesn't hold up across suppliers).
+function processHistoricalPaidRows(rows){
+  const filtered = rows.filter(r => (r.Status || '').trim().toLowerCase() === 'paid');
+  const invoiceMap = new Map();
+  let blankKeyCounter = 0;
+  filtered.forEach(r => {
+    const company = (r.ContactName || 'Unknown company').trim();
+    const rawKey = (r.InvoiceNumber || '').trim();
+    const key = company + '||' + (rawKey ? rawKey : '__no_invoice_number__' + (blankKeyCounter++));
+    if(!invoiceMap.has(key)) invoiceMap.set(key, r);
+  });
+
+  const list = [];
+  invoiceMap.forEach(r => {
+    const paidAmount = parseAmount(r.InvoiceAmountPaid);
+    const amount = paidAmount !== 0 ? paidAmount : parseAmount(r.Total);
+    const rounded = Math.round(amount * 100) / 100;
+    if(rounded === 0) return;
+    list.push({
+      company: (r.ContactName || 'Unknown company').trim(),
+      invoiceNumber: r.InvoiceNumber || '',
+      reference: r.Reference || '',
+      dueDate: parseUKDate(r.DueDate),
+      paidDate: parseUKDate(r.PlannedDate) || parseUKDate(r.InvoiceDate),
+      amount: rounded
+    });
+  });
+  return list;
+}
+
+async function handlePaymentsFile(file){
+  document.getElementById('paymentsFileName').textContent = 'Reading ' + file.name + '…';
+  let rows;
+  try{
+    rows = await parseFileToRows(file);
+  } catch(err){
+    alert('Could not read that file — ' + (err && err.message ? err.message : 'unknown error') + '.');
+    return;
+  }
+
+  const historicalItems = processHistoricalPaidRows(rows);
+  if(!historicalItems.length){
+    document.getElementById('paymentsFileName').textContent = '';
+    alert('No paid bills found in that file (after removing zero-value lines).');
+    return;
+  }
+  if(!confirm('Import ' + historicalItems.length + ' historical paid bill(s) as already-paid payments? This writes straight to the database.')) {
+    document.getElementById('paymentsFileName').textContent = '';
+    return;
+  }
+
+  let imported = 0;
+  try{
+    for(const it of historicalItems){
+      const paidIso = it.paidDate
+        ? new Date(Date.UTC(it.paidDate.getUTCFullYear(), it.paidDate.getUTCMonth(), it.paidDate.getUTCDate())).toISOString()
+        : new Date().toISOString();
+      const { data: paymentRow, error: payErr } = await sb.from('wdwo_payments')
+        .insert({ status: 'paid', paid_at: paidIso, created_at: paidIso })
+        .select().single();
+      if(payErr) throw payErr;
+      const { error: itemErr } = await sb.from('wdwo_payment_items').insert({
+        payment_id: paymentRow.id,
+        company: it.company,
+        invoice_number: it.invoiceNumber || null,
+        reference: it.reference || null,
+        due_date: it.dueDate ? toDateInputValue(it.dueDate) : null,
+        amount: it.amount
+      });
+      if(itemErr) throw itemErr;
+      imported++;
+      document.getElementById('paymentsFileName').textContent = 'Imported ' + imported + ' of ' + historicalItems.length + '…';
+    }
+    document.getElementById('paymentsFileName').textContent = 'Imported ' + imported + ' historical payment(s) from ' + file.name;
+    await refreshRaisedPayments();
+    reapplyRaisedStatus();
+    render();
+    renderPayments();
+  } catch(err){
+    document.getElementById('paymentsFileName').textContent = 'Import stopped after ' + imported + ' of ' + historicalItems.length + ' — ' + (err && err.message ? err.message : 'unknown error');
+    await refreshRaisedPayments();
+    reapplyRaisedStatus();
+    render();
+    renderPayments();
+  }
+}
+
+document.getElementById('paymentsFileInput').addEventListener('change', (e) => {
+  if(e.target.files.length) handlePaymentsFile(e.target.files[0]);
+});
+
+const paymentsDropZone = document.getElementById('paymentsDropZone');
+paymentsDropZone.addEventListener('dragover', (e) => { e.preventDefault(); paymentsDropZone.classList.add('dragover'); });
+paymentsDropZone.addEventListener('dragleave', () => paymentsDropZone.classList.remove('dragover'));
+paymentsDropZone.addEventListener('drop', (e) => {
+  e.preventDefault();
+  paymentsDropZone.classList.remove('dragover');
+  if(e.dataTransfer.files.length) handlePaymentsFile(e.dataTransfer.files[0]);
+});
+
+document.getElementById('paySearchBox').addEventListener('input', renderPayments);
+document.getElementById('paySortSelect').addEventListener('change', renderPayments);
+document.getElementById('paymentsDateFrom').addEventListener('change', renderPayments);
+document.getElementById('paymentsDateTo').addEventListener('change', renderPayments);
+document.getElementById('paymentsDateAllBtn').addEventListener('click', () => {
+  setDefaultPaymentsDateRange();
+  renderPayments();
+});
+document.getElementById('paymentsRefreshBtn').addEventListener('click', async () => {
+  await refreshRaisedPayments();
+  reapplyRaisedStatus();
+  render();
+  renderPayments();
+});
+
+document.getElementById('paySelectAllCheckbox').addEventListener('change', (e) => {
+  const list = getFilteredSortedPayments();
+  if(e.target.checked) list.forEach(p => selectedPayments.add(p.id));
+  else list.forEach(p => selectedPayments.delete(p.id));
+  renderPayments();
+});
+document.getElementById('markSelectedPaidBtn').addEventListener('click', async () => {
+  const ids = Array.from(selectedPayments);
+  if(!ids.length) return;
+  try{
+    const { error } = await sb.from('wdwo_payments').update({ status: 'paid', paid_at: new Date().toISOString() }).in('id', ids);
+    if(error) throw error;
+    selectedPayments.clear();
+    await refreshRaisedPayments();
+    reapplyRaisedStatus();
+    render();
+    renderPayments();
+  } catch(err){
+    alert('Could not mark those payments as paid — ' + (err && err.message ? err.message : 'unknown error') + '.');
+  }
+});
+document.getElementById('markSelectedUnpaidBtn').addEventListener('click', async () => {
+  const ids = Array.from(selectedPayments);
+  if(!ids.length) return;
+  try{
+    const { error } = await sb.from('wdwo_payments').update({ status: 'unpaid', paid_at: null }).in('id', ids);
+    if(error) throw error;
+    selectedPayments.clear();
+    await refreshRaisedPayments();
+    reapplyRaisedStatus();
+    render();
+    renderPayments();
+  } catch(err){
+    alert('Could not mark those payments as unpaid — ' + (err && err.message ? err.message : 'unknown error') + '.');
+  }
+});
+document.getElementById('clearSelectionBtn').addEventListener('click', () => {
+  selectedPayments.clear();
+  renderPayments();
+});
+
+/* ---------- Page-level tab switching ---------- */
+
+document.getElementById('navOwedBtn').addEventListener('click', () => {
+  document.getElementById('navOwedBtn').classList.add('active');
+  document.getElementById('navPaymentsBtn').classList.remove('active');
+  document.getElementById('page-owed').style.display = 'block';
+  document.getElementById('page-payments').style.display = 'none';
+});
+document.getElementById('navPaymentsBtn').addEventListener('click', async () => {
+  document.getElementById('navPaymentsBtn').classList.add('active');
+  document.getElementById('navOwedBtn').classList.remove('active');
+  document.getElementById('page-payments').style.display = 'block';
+  document.getElementById('page-owed').style.display = 'none';
+  await refreshRaisedPayments();
+  reapplyRaisedStatus();
+  render();
+  renderPayments();
+});
+
+/* ---------- Initial load ---------- */
+// Payments Raised is Supabase-backed and not tied to a CSV upload, so it
+// loads as soon as the page opens - this also means Who Do We Owe already
+// has a populated raisedItemsIndex by the time you upload a Bills CSV,
+// though handleFile() also re-fetches to be safe against slow connections.
+(async function initPayments(){
+  await refreshRaisedPayments();
+  setDefaultPaymentsDateRange();
+  renderPayments();
+})();
 <\/script>
 
 </body>
@@ -12456,7 +13226,144 @@ loadSubs();
 </body>
 </html>
 </script>
-<script type="text/plain" id="guide-whodoweowe">JVBERi0xLjMKJZOMi54gUmVwb3J0TGFiIEdlbmVyYXRlZCBQREYgZG9jdW1lbnQgKG9wZW5zb3VyY2UpCjEgMCBvYmoKPDwKL0YxIDIgMCBSIC9GMiAzIDAgUgo+PgplbmRvYmoKMiAwIG9iago8PAovQmFzZUZvbnQgL0hlbHZldGljYSAvRW5jb2RpbmcgL1dpbkFuc2lFbmNvZGluZyAvTmFtZSAvRjEgL1N1YnR5cGUgL1R5cGUxIC9UeXBlIC9Gb250Cj4+CmVuZG9iagozIDAgb2JqCjw8Ci9CYXNlRm9udCAvSGVsdmV0aWNhLUJvbGQgL0VuY29kaW5nIC9XaW5BbnNpRW5jb2RpbmcgL05hbWUgL0YyIC9TdWJ0eXBlIC9UeXBlMSAvVHlwZSAvRm9udAo+PgplbmRvYmoKNCAwIG9iago8PAovQ29udGVudHMgOCAwIFIgL01lZGlhQm94IFsgMCAwIDU5NS4yNzU2IDg0MS44ODk4IF0gL1BhcmVudCA3IDAgUiAvUmVzb3VyY2VzIDw8Ci9Gb250IDEgMCBSIC9Qcm9jU2V0IFsgL1BERiAvVGV4dCAvSW1hZ2VCIC9JbWFnZUMgL0ltYWdlSSBdCj4+IC9Sb3RhdGUgMCAvVHJhbnMgPDwKCj4+IAogIC9UeXBlIC9QYWdlCj4+CmVuZG9iago1IDAgb2JqCjw8Ci9QYWdlTW9kZSAvVXNlTm9uZSAvUGFnZXMgNyAwIFIgL1R5cGUgL0NhdGFsb2cKPj4KZW5kb2JqCjYgMCBvYmoKPDwKL0F1dGhvciAoYW5vbnltb3VzKSAvQ3JlYXRpb25EYXRlIChEOjIwMjYwNzMxMTMzOTEyKzAwJzAwJykgL0NyZWF0b3IgKGFub255bW91cykgL0tleXdvcmRzICgpIC9Nb2REYXRlIChEOjIwMjYwNzMxMTMzOTEyKzAwJzAwJykgL1Byb2R1Y2VyIChSZXBvcnRMYWIgUERGIExpYnJhcnkgLSBcKG9wZW5zb3VyY2VcKSkgCiAgL1N1YmplY3QgKHVuc3BlY2lmaWVkKSAvVGl0bGUgKHVudGl0bGVkKSAvVHJhcHBlZCAvRmFsc2UKPj4KZW5kb2JqCjcgMCBvYmoKPDwKL0NvdW50IDEgL0tpZHMgWyA0IDAgUiBdIC9UeXBlIC9QYWdlcwo+PgplbmRvYmoKOCAwIG9iago8PAovRmlsdGVyIFsgL0FTQ0lJODVEZWNvZGUgL0ZsYXRlRGVjb2RlIF0gL0xlbmd0aCAxNjU2Cj4+CnN0cmVhbQpHYXRVMzlsSyZNJkFANy5iYzA+TCozSHE+SEtgMTpHLlUjRCVOOTM1X2Q0MTpOayg5QEpZXzs4XlYyTGdBQkJaUSdGOTxDKC5GK0FEcyJfTkgvUlxTQjBWOyteYlVbQFQwO1trYU9mQCg6J2dZUT5pZlVBZ111MDVqKmo1WFw1QV5rK1pOb2ciXEFcaCY+dWUqSjltamw/TjlCRWEpT1owYl0yKV9LbVg5Qz88aHVucU5hTF8+JF4lJiVqLi85XFtvW09xIiJDTGpqZToycytMPTFBNys2Um5gJ11tYSllVDpgTFhcJTlcYWxBa0ovJFxePXUyZ1BdNFpPW0ghSTE+ZUIoIzA1JG06X3NYVElmKHBoMytVV1RFb0JcbUxbcT5lN1NlRzZmIVttQURGXGIiKF9TclxaYDNMK1hXSVs+WyRJXkk3RVhmPDNnOUEuJm9gT0VkQmUkcTZnbCYyXFlaPmUmUFEwVDYhZTUqYDEybV9MLEJrJkxHYXVIYDYxNExMMWJMUVtSKFp1REU+Z2slSjNxYV07QTxBZ1cvWkpcJzNBYmchP282KUljIWIjSzQ0TSNAPj89TVssJV1ZMyN1YUpcMzx1YVEkWXA5a3BBVCgtZTc4RHA2WXBlJyROaGVwMG0hb04mRD03cDtIZiY0TyhYKUc+OyFWVjA5PGoqIlZBK2BnK0tHQXEkajZkZ0xEXkZKYFdNN0VyNXBvMDZWc19oIUZMZ05VJHNpQGw0IidZbD49US1dYCZMNVhnJDVxOUJqL3BSJ2hOXVY7MURcPj9jcC8nNStRVicuT2pdWVVoUGxhXV43YG9JM2ZTVzk4Tyo3SXRSSyhFdURGMVVqO0tFRTNdcys3XypsLnUjWWBFRFkjaj8+NjxOc0RASFMiOihWUEdNPSIzNkFWTyc6M0NaVSdpZm90WWBFKF5eQk1DPExEQE1paWBvVW0jZyJJSEprbThBLFUpK2t0XW46Sz5Ma1U4M3M4KTtccClgbltydGg+RXAyJWJsXURebnJwJkByTmkwXW0oPm9cTzsrTCtbTTRlP0cyUDIwPTliP2c0TyIyZi04b1Q2WiRtTl4+VTghS0o0OGUrTilkOWNuOkQiI0hoMTYpJGdHdDFuNiI4KGZVaG05WFAsSi9AN0ssRDZZVjpIXkUtQz5cLTg1JyxqS3JoSDA6XCROKFxQaW9SZWk1W0hXOjFSZC1KM3FMNGdMUS9qQ2pHcGA9RzlIVTVrcVdGJ2c/IS1IY2dSUCVST19cXHIvZCtqQXJTZl9vNilobi0tWGRMJEpRMSxSJEFwIVJoRShjYitgQTwsQ0NgakwtZXIuW1k/WylJWTJpZzhmNUozY0k6W29AJGtJTFIhOUQ/RlFUVTNIMkxrMyRZXURXZjlmLXM+NS5UVVc7WUNlKXU/RlIpSkhUVDJVakhhQSRZJ0hST08zOC88Ryw5cmo3bV5tPCxLIVtzQnRUaVBeRzY9VyNWVUs8UjQ1KFVFK14ldUQvSzxDcmF0KnI4XVdRNnFDWF1tW2YhT0lDYHU9VlFFS1U4WmIyXlJHNEFAXGk4VGYkZyVYVWkoIlRKXUU1dFckL3FyL3A0dUtoWHFsTCxOTXJQLlUqXTtlWmxuLV1ZbWs0IiNhMUtYJiowYTQmOklzY3MlOGtTWmsvRiF1IkFPZCNrSW07PWZyWTsla2k7UVElOTMkRztSVlJIb0tob2hCMDpAQCVsRDlvIW9AOFlTZWdrc3JGYmlJISMxIS5Xck5RNjUjSl5KRCwrS0dNOWRuVXQuKHFHXC9pVChWcGxtUjNbM11IaSU5YENuVlFJVTB0ZGpdLE9JKW9dajVLTyZaK1EqVF4uM0U6Y2FgWGZZYWBxTSZiKWlAcycuLEc1Y0wjWmVaUGxhc004YEJQZ2U/TW9aaHNgZUorMGhQcFtfL1hrQSNGLnRUNyg+YjJNZWwtYlwlXi1lP0U+Zi47KmckbShRa0lNKyxedUtaJztHJDJaPlFHSUA1JGhTXiU/b2hRU1M7ZT1TWUdQdTEzRi8iKSRmaGw2Oy08Nls6PGUxMUJCUkdsVzJeaic3M0stWDxBbDs2VW0lQHU9TGdeIUJvZkQsL1MnKWJKOU9INkxGXERbNk5mQm1USi4nOWI1ZHRVNDBgVzNdNnNcNVZiOmVzUFs6aUVYYTspVj1SdTFYci5aVlheU0dgXEtcYiE8fj5lbmRzdHJlYW0KZW5kb2JqCnhyZWYKMCA5CjAwMDAwMDAwMDAgNjU1MzUgZiAKMDAwMDAwMDA2MSAwMDAwMCBuIAowMDAwMDAwMTAyIDAwMDAwIG4gCjAwMDAwMDAyMDkgMDAwMDAgbiAKMDAwMDAwMDMyMSAwMDAwMCBuIAowMDAwMDAwNTI0IDAwMDAwIG4gCjAwMDAwMDA1OTIgMDAwMDAgbiAKMDAwMDAwMDg1MyAwMDAwMCBuIAowMDAwMDAwOTEyIDAwMDAwIG4gCnRyYWlsZXIKPDwKL0lEIApbPDUzMWFhZmNiNTdiYWVhNzRlZTk4ZmY0YWE2ZGI2NzExPjw1MzFhYWZjYjU3YmFlYTc0ZWU5OGZmNGFhNmRiNjcxMT5dCiUgUmVwb3J0TGFiIGdlbmVyYXRlZCBQREYgZG9jdW1lbnQgLS0gZGlnZXN0IChvcGVuc291cmNlKQoKL0luZm8gNiAwIFIKL1Jvb3QgNSAwIFIKL1NpemUgOQo+PgpzdGFydHhyZWYKMjY1OQolJUVPRgo=</script>
+<script type="text/plain" id="guide-whodoweowe"><!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Who Do We Owe — How To</title>
+<style>
+  html,body{margin:0;padding:0;}
+  body{
+    font-family:"Segoe UI", -apple-system, BlinkMacSystemFont, sans-serif;
+    background:#f2f3f6;
+    color:#2b2e34;
+  }
+  .wrap{max-width:760px;margin:0 auto;padding:40px 24px 64px;}
+  header{
+    border-bottom:3px solid #1b2a52;
+    padding-bottom:16px;
+    margin-bottom:28px;
+  }
+  header h1{
+    font-size:26px;
+    margin:0 0 6px 0;
+    color:#1b2a52;
+  }
+  header p{margin:0;color:#6f7175;font-size:14px;}
+  h2{
+    font-size:16px;
+    color:#1b2a52;
+    margin:32px 0 10px 0;
+    padding-bottom:6px;
+    border-bottom:1px solid #dcdbd8;
+  }
+  p{line-height:1.6;font-size:14.5px;}
+  ol,ul{line-height:1.7;font-size:14.5px;padding-left:22px;}
+  li{margin-bottom:6px;}
+  .tag{
+    display:inline-block;
+    background:#eef2ff;
+    color:#1b2a52;
+    border:1px solid #c7cfe6;
+    border-radius:6px;
+    padding:1px 8px;
+    font-size:12.5px;
+    font-weight:700;
+    margin-right:4px;
+  }
+  .note{
+    background:#fff9e0;
+    border:1px solid #ffe58f;
+    border-radius:8px;
+    padding:12px 16px;
+    font-size:13.5px;
+    margin:16px 0;
+  }
+  .warn{
+    background:#fdecea;
+    border:1px solid #f3b8b0;
+    border-radius:8px;
+    padding:12px 16px;
+    font-size:13.5px;
+    margin:16px 0;
+  }
+  .tab-list{
+    display:flex;
+    flex-wrap:wrap;
+    gap:8px;
+    margin:10px 0 4px 0;
+  }
+  .tab-list span{
+    background:#1b2a52;
+    color:#fff;
+    border-radius:16px;
+    padding:5px 14px;
+    font-size:12.5px;
+    font-weight:700;
+  }
+  @media print{ body{background:#fff;} }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <h1>Who Do We Owe — How To</h1>
+    <p>Outstanding supplier bills and the payments raised against them — synced to Supabase, so a payment you raise here shows up straight away, and stays there until it's marked paid, no matter who's looking or when.</p>
+  </header>
+
+  <p>The tool has two pages, switched with the buttons at the top:</p>
+  <div class="tab-list">
+    <span>Who Do We Owe</span>
+    <span>Payments Raised</span>
+  </div>
+
+  <h2>1. Who Do We Owe</h2>
+  <ol>
+    <li>Upload a Xero Bills export (CSV or Excel) — <span class="tag">Business → Bills to pay → Export</span>.</li>
+    <li>Suppliers are listed with what's owed, overdue amounts, and the oldest due date. Click a supplier's row to expand it and see the individual invoices.</li>
+    <li>Use the tabs — <span class="tag">Full Breakdown</span>, <span class="tag">Overdue</span>, <span class="tag">Due within 7 days</span>, <span class="tag">Due within 14 days</span>, <span class="tag">Due By Date Range</span> — to narrow down what you're looking at. Search, sort, and the print button all work as before.</li>
+  </ol>
+
+  <h2>2. Raising a payment</h2>
+  <ol>
+    <li>Expand a supplier and tick the invoices you're paying together in one bank payment — this works across as many invoices as you like, for one supplier or several.</li>
+    <li>A bar appears showing how many invoices are selected and the total. Check it matches what you're about to send before going further.</li>
+    <li>Click <span class="tag">Create Payment</span>. This writes the payment straight to the shared database — there's no separate save step.</li>
+    <li>Those invoices immediately show a <span class="tag">Payment Raised</span> badge here in Who Do We Owe, and drop out of Total Owed, Overdue, and the due-date tabs — they're still visible, just no longer counted as outstanding, since they've been actioned.</li>
+    <li>Switch to <span class="tag">Payments Raised</span> and the payment is already there, waiting on Director sign-off.</li>
+  </ol>
+
+  <div class="note">
+    <strong>Made a mistake with the selection?</strong> Go to Payments Raised and click the <strong>✕</strong> next to the payment while it's still Unpaid — this cancels it and puts the invoice(s) straight back into Who Do We Owe.
+  </div>
+
+  <h2>3. Payments Raised</h2>
+  <ol>
+    <li>This page loads live from the database — nothing to upload for day-to-day use.</li>
+    <li>Each row is one payment. If it covers several invoices (a batch payment), a <strong>▶</strong> arrow appears next to the supplier name — click the row to expand and see the individual invoices making it up, same layout as a bank batch payment summary.</li>
+    <li>The three cards at the top — <span class="tag">Unpaid</span>, <span class="tag">Paid</span>, <span class="tag">Payments</span> — total up automatically as payments move between the two states.</li>
+    <li>Click the <strong>Unpaid</strong> pill on a row once a Director has actually processed that payment — it flips to <strong>✓ Paid</strong>, the totals update immediately, and it's recorded from then on.</li>
+    <li>Tick the checkboxes on the left and use <span class="tag">Mark selected Paid</span> / <span class="tag">Mark selected Unpaid</span> to update several payments in one go.</li>
+    <li>Use the date range and search box to narrow the list down; <span class="tag">↻ Refresh</span> re-pulls the latest data if it's been open a while.</li>
+  </ol>
+
+  <h2>4. Importing historical paid bills</h2>
+  <p>Open the <strong>"Import historical Paid Bills"</strong> section at the bottom of Payments Raised. Upload a Xero Paid Bills export and each bill imports as its own already-paid payment — a one-time way to bring your existing backlog into the system without needing to raise each one by hand.</p>
+
+  <div class="warn">
+    <strong>This writes straight to the database — there's no undo button for a bulk import.</strong> Double-check the file before confirming the import.
+  </div>
+
+  <div class="note">
+    <strong>Data is shared and live.</strong> Because Who Do We Owe and Payments Raised both talk to the same Supabase database, a payment raised on one computer shows up everywhere else instantly — there's no file to email round or session to lose.
+  </div>
+
+</div>
+</body>
+</html>
+</script>
 <script type="text/plain" id="guide-subinvoices"><!DOCTYPE html>
 <html lang="en">
 <head>
