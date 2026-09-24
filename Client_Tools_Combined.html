@@ -8157,6 +8157,7 @@ table.rpt-tbl tr:last-child td{border-bottom:none}
     <h2 style="font-size:18px;font-weight:800">Holiday &amp; Absence Log</h2>
     <div style="display:flex;gap:8px;flex-wrap:wrap">
       <button class="btn btn-ghost" onclick="exportHolidaysCSV()" title="Download all records as a spreadsheet">📥 Export CSV</button>
+      <button class="btn btn-ghost" onclick="openLeaveReportPicker()" title="Print leave reports for all staff or chosen staff">🧾 Leave Reports</button>
       <button class="btn btn-ghost" onclick="exportBackup()" title="Save a full data backup file">💾 Backup Data</button>
       <button class="btn btn-ghost" onclick="importBackup()" title="Restore from a backup file">📂 Restore Backup</button>
       <button class="btn" style="background:#1C5FA8;color:#fff;font-weight:700" onclick="openAllocateAllModal()">🗓 Allocate to All Staff</button>
@@ -8452,6 +8453,12 @@ table.rpt-tbl tr:last-child td{border-bottom:none}
         <div class="rpt-desc">Days remaining to be taken before leave year ends, and the financial cost of untaken leave per person.</div>
         <div class="rpt-badge">Year-end planning</div>
       </div>
+      <div class="rpt-card" onclick="openReport('leavereport')">
+        <div class="rpt-icon">🧾</div>
+        <div class="rpt-title">Staff Leave Report</div>
+        <div class="rpt-desc">One A4 page per person: entitlement summary at the top, full leave breakdown below. Print or save as PDF for one person or all staff.</div>
+        <div class="rpt-badge">1 page per person</div>
+      </div>
       <div class="rpt-card" onclick="openReport('overtime')">
         <div class="rpt-icon">⏰</div>
         <div class="rpt-title">Overtime Tracker</div>
@@ -8468,7 +8475,7 @@ table.rpt-tbl tr:last-child td{border-bottom:none}
       <div class="rpt-area-hdr">
         <div class="rpt-icon" id="rptOutputIcon" style="font-size:20px"></div>
         <h3 id="rptOutputTitle">Report</h3>
-        <button class="btn btn-ghost btn-sm" onclick="window.print()" style="margin-left:auto;color:#fff;border-color:rgba(255,255,255,.3)">🖨 Print / PDF</button>
+        <button class="btn btn-ghost btn-sm" onclick="rptPrint()" style="margin-left:auto;color:#fff;border-color:rgba(255,255,255,.3)">🖨 Print / PDF</button>
         <button class="btn btn-ghost btn-sm" onclick="exportRptCSV()" id="rptExportBtn" style="color:#fff;border-color:rgba(255,255,255,.3)">📥 Export CSV</button>
       </div>
       <div class="rpt-area-body" id="rptOutputBody"></div>
@@ -9671,7 +9678,7 @@ function renderHolidays() {
               <span style="background:#E3F2FD;color:#1565C0;border:1px solid #90CAF9;border-radius:3px;padding:1px 6px;font-size:9px;font-weight:700;margin-left:4px">ZERO-HRS</span>
               <span style="font-weight:400;font-size:11px;color:var(--grey);margin-left:4px">${s.title||''}</span>
             </div>
-            <span style="font-size:10px;color:var(--grey)">12.07% accrual rate</span>
+            <div style="display:flex;align-items:center;gap:8px"><span style="font-size:10px;color:var(--grey)">12.07% accrual rate</span><button class="btn btn-ghost btn-sm" onclick="printLeaveReport(${s.id})" title="Print or save this person's leave report">🧾 Report</button></div>
           </div>
           <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:8px">
             <div style="font-size:11px"><span style="font-weight:700;color:var(--navy)">${acc.totalHoursWorked}h</span> worked</div>
@@ -9716,7 +9723,7 @@ function renderHolidays() {
       <div style="border:1px solid var(--border);border-radius:6px;padding:12px 14px;margin-bottom:10px">
         <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
           <div style="font-weight:800;font-size:13px">${s.name} <span style="font-weight:400;font-size:11px;color:var(--grey)">${s.title||''}</span></div>
-          ${leaveYearNote}
+          <div style="display:flex;align-items:center;gap:8px">${leaveYearNote}<button class="btn btn-ghost btn-sm" onclick="printLeaveReport(${s.id})" title="Print or save this person's leave report">🧾 Report</button></div>
         </div>
 
         <!-- Entitlement overview strip -->
@@ -11434,7 +11441,7 @@ const rptSelections = {};
 function renderReport(type) {
   // Save current filter values BEFORE any DOM changes
   ['rptWk','rptWkStaff','rptHolStaff','rptIndStaff','rptIndMonth','rptIndMonthTo',
-   'rptPayMth','rptAbsStaff','rptOTStaff','rptOTFrom','rptOTTo'].forEach(id => {
+   'rptPayMth','rptAbsStaff','rptOTStaff','rptOTFrom','rptOTTo','rptLeaveStaff'].forEach(id => {
     const el = document.getElementById(id);
     if (el) rptSelections[id] = el.value;
   });
@@ -11451,11 +11458,12 @@ function renderReport(type) {
     case 'absence':        renderRptAbsence(body);        break;
     case 'liability':      renderRptLiability(body);      break;
     case 'overtime':       renderRptOvertime(body);       break;
+    case 'leavereport':    renderRptLeave(body);          break;
   }
 
   // Restore saved values into freshly rendered filters, then re-save DOM state
   ['rptWk','rptWkStaff','rptHolStaff','rptIndStaff','rptIndMonth','rptIndMonthTo',
-   'rptPayMth','rptAbsStaff','rptOTStaff','rptOTFrom','rptOTTo'].forEach(id => {
+   'rptPayMth','rptAbsStaff','rptOTStaff','rptOTFrom','rptOTTo','rptLeaveStaff'].forEach(id => {
     const el = document.getElementById(id);
     if (el && rptSelections[id]) {
       el.value = rptSelections[id];
@@ -11585,6 +11593,323 @@ function renderRptTimesheet(body) {
 
   body.innerHTML += html2;
   rptExportData = csvRows;
+}
+
+// ════════════════════════════════════════
+// (see Staff Leave Report below)
+// ════════════════════════════════════════
+// ════════════════════════════════════════
+// STAFF LEAVE REPORT — one A4 page per person
+// Summary tiles at the top, full leave breakdown below.
+// Used by the Holidays tab buttons and the Reports tab card.
+// ════════════════════════════════════════
+function lrEsc(v) {
+  return String(v == null ? '' : v).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function lrNum(n) {                       // 1 -> "1", 0.5 -> "0.5", 18.25 -> "18.3"
+  n = Math.round((Number(n) || 0) * 10) / 10;
+  return String(n);
+}
+function lrDays(n) { return lrNum(n) + ' day' + (Math.abs(n) === 1 ? '' : 's'); }
+function lrFmt(d) {
+  const dt = (d instanceof Date) ? d : new Date(d + 'T00:00:00');
+  return dt.toLocaleDateString('en-GB', {day:'2-digit', month:'short', year:'numeric'});
+}
+
+// Work out every figure the report needs for one staff member
+function lrData(s) {
+  const today = new Date(); today.setHours(0,0,0,0);
+  const ly = getLeaveYear(s);
+  const inYear = h => { const d = new Date(h.from + 'T00:00:00'); return d >= ly.start && d <= ly.end; };
+  const recs = holidays.filter(h => h.staffId === s.id && inYear(h))
+                       .sort((a,b) => a.from.localeCompare(b.from));
+  const sum = (arr) => arr.reduce((a,h) => a + (Number(h.days) || 0), 0);
+  const byType = t => sum(recs.filter(h => h.type === t));
+  const counted = recs.filter(h => LEAVE_TYPES.includes(h.type));
+  const isPast = h => new Date(h.from + 'T00:00:00') < today;
+  const d = {
+    s, ly, recs, today,
+    hourly:  s.contractType === 'hourly',
+    hol:     byType('Holiday'),
+    bank:    byType('Bank Hol'),
+    other:   byType('Other'),
+    sick:    byType('Sick'),
+    unpaid:  byType('Unpaid'),
+    used:    sum(counted),
+    taken:   sum(counted.filter(isPast)),
+    booked:  sum(counted.filter(h => !isPast(h))),
+    isPast
+  };
+  if (d.hourly) {
+    d.hacc = getHourlyStaffAccrual(s.id);
+  } else {
+    d.full  = (Number(s.allowance) || 0) + (Number(s.carryOver) || 0);
+    d.acc   = calcAccrual(s);
+    d.accr  = d.acc ? d.acc.accrued + (Number(s.carryOver) || 0) : null;
+    d.rem   = d.full - d.used;
+    d.ahead = d.accr == null ? null : d.used - d.accr;
+  }
+  return d;
+}
+
+function lrPage(s) {
+  const d = lrData(s);
+  const co = COMPANIES[currentCompany];
+  const TC = {Holiday:'#15803d','Bank Hol':'#1d4ed8',Other:'#6d28d9',Sick:'#b91c1c',Unpaid:'#b45309'};
+  const leaveYear = `${lrFmt(d.ly.start)} – ${lrFmt(d.ly.end)}`;
+  const noStart = !s.leaveStart ? ' (calendar year — no leave year start set)' : '';
+
+  // ── Summary tiles ──
+  let tiles, barHtml, legend, facts;
+  if (!d.hourly) {
+    const remCls = d.rem < 0 ? 'bad' : (d.rem <= 1 ? 'warn' : 'good');
+    tiles = `
+      <div class="tile"><div class="big navy">${lrNum(d.full)}</div><div class="lab">Full-year entitlement${s.carryOver>0?`<br>(incl. ${lrNum(s.carryOver)}d carried over)`:''}</div></div>
+      <div class="tile blue-bg"><div class="big blue">${d.accr==null?'—':lrNum(d.accr)}</div><div class="lab">${d.acc?`Accrued so far (${d.acc.monthsComplete} month${d.acc.monthsComplete===1?'':'s'})`:'Accrued so far (no start date)'}</div></div>
+      <div class="tile"><div class="big red">${lrNum(d.used)}</div><div class="lab">Days used (incl. booked)</div></div>
+      <div class="tile ${remCls}-bg"><div class="big ${remCls}">${lrNum(d.rem)}</div><div class="lab">Remaining (full year)</div></div>`;
+    const base = Math.max(d.full, d.used) || 1;
+    const seg = [[d.hol,'#15803d'],[d.bank,'#1d4ed8'],[d.other,'#6d28d9'],[Math.max(0,d.full-d.used),'#f3f4f6']]
+      .filter(x => x[0] > 0);
+    barHtml = seg.map(x => `<div style="width:${(x[0]/base*100).toFixed(2)}%;background:${x[1]}"></div>`).join('');
+    const pct = d.full > 0 ? Math.round(d.used / d.full * 100) : 0;
+    legend = `<b style="color:#15803d">${lrNum(d.hol)}d holiday</b> &nbsp; <b style="color:#1d4ed8">${lrNum(d.bank)}d bank holiday</b> &nbsp; <b style="color:#6d28d9">${lrNum(d.other)}d other</b> &nbsp; <span class="muted">${lrNum(Math.max(0,d.rem))}d unused</span> &nbsp;|&nbsp; ${lrNum(d.used)} of ${lrNum(d.full)} days used (${pct}%)`;
+    const accTxt = d.ahead == null ? '<span class="muted">Set a leave year start to track accrual</span>'
+      : d.ahead > 0 ? `<b style="color:#b45309">${lrDays(d.ahead)} ahead of accrual</b>`
+      : `<b style="color:#15803d">Within accrual (${lrDays(-d.ahead)} in hand)</b>`;
+    facts = [
+      ['Taken to date', lrDays(d.taken), 'Booked (future)', lrDays(d.booked)],
+      ['Sickness', d.sick ? `${lrDays(d.sick)} (not deducted from entitlement)` : 'None recorded', 'Against accrual', accTxt]
+    ];
+  } else {
+    const h = d.hacc;
+    const remCls = h.remainingHours < 0 ? 'bad' : 'good';
+    tiles = `
+      <div class="tile"><div class="big navy">${lrNum(h.totalHoursWorked)}h</div><div class="lab">Hours worked (recorded)</div></div>
+      <div class="tile blue-bg"><div class="big blue">${lrNum(h.accruedHours)}h</div><div class="lab">Holiday accrued (12.07%)</div></div>
+      <div class="tile"><div class="big red">${lrNum(h.holHoursUsed)}h</div><div class="lab">Holiday used (${lrNum(d.used)} days)</div></div>
+      <div class="tile ${remCls}-bg"><div class="big ${remCls}">${lrNum(h.remainingHours)}h</div><div class="lab">Remaining</div></div>`;
+    const base = Math.max(h.accruedHours, h.holHoursUsed) || 1;
+    const usedPct = Math.min(100, h.holHoursUsed / base * 100);
+    barHtml = `<div style="width:${usedPct.toFixed(2)}%;background:#15803d"></div><div style="width:${(100-usedPct).toFixed(2)}%;background:#f3f4f6"></div>`;
+    legend = `Zero-hours contract — holiday tracked in hours. Avg day: <b>${lrNum(h.avgDailyHours)}h</b> · Avg week: <b>${lrNum(h.avgWeeklyHours)}h</b> · Based on ${h.weeksRecorded} week${h.weeksRecorded===1?'':'s'} recorded`;
+    facts = [
+      ['Taken to date', lrDays(d.taken), 'Booked (future)', lrDays(d.booked)],
+      ['Sickness', d.sick ? lrDays(d.sick) : 'None recorded', 'Unpaid', d.unpaid ? lrDays(d.unpaid) : 'None recorded']
+    ];
+  }
+
+  // ── Breakdown table ──
+  const rows = d.recs.map(h => {
+    const dates = h.from === h.to ? lrFmt(h.from) : `${lrFmt(h.from)} – ${lrFmt(h.to)}`;
+    const past = d.isPast(h);
+    return `<tr>
+      <td>${dates}</td>
+      <td><b style="color:${TC[h.type]||'#374151'}">${lrEsc(h.type)}</b></td>
+      <td class="c"><b>${lrNum(h.days)}</b></td>
+      <td>${lrEsc(h.notes||'')}</td>
+      <td class="${past?'':'muted'}">${past?'Taken':'Booked'}</td>
+    </tr>`;
+  }).join('');
+  const compact = d.recs.length > 20 ? ' compact' : '';
+
+  return `
+  <section class="page${compact}">
+    <div class="co">
+      ${co.logo ? `<img src="${co.logo}" alt="">` : ''}
+      <div><div class="co-name">${lrEsc(co.name)}</div><div class="co-sub">${lrEsc(co.printContact||'')}</div></div>
+    </div>
+    <h1>Staff Leave Report</h1>
+    <div class="sub"><b>${lrEsc(s.name)}</b>${s.title?` &nbsp;·&nbsp; ${lrEsc(s.title)}`:''} &nbsp;·&nbsp; Leave year ${leaveYear}${noStart} &nbsp;·&nbsp; Report date ${lrFmt(d.today)}</div>
+
+    <div class="tiles">${tiles}</div>
+    <div class="bar">${barHtml}</div>
+    <div class="legend">${legend}</div>
+
+    <table class="facts">
+      ${facts.map(f => `<tr><th>${f[0]}</th><td>${f[1]}</td><th>${f[2]}</th><td>${f[3]}</td></tr>`).join('')}
+    </table>
+
+    <h2>Leave Breakdown</h2>
+    ${d.recs.length === 0
+      ? '<p class="muted">No leave recorded in this leave year.</p>'
+      : `<table class="bd">
+          <thead><tr><th style="width:28%">Dates</th><th style="width:12%">Type</th><th class="c" style="width:8%">Days</th><th>Reason</th><th style="width:11%">Status</th></tr></thead>
+          <tbody>${rows}</tbody>
+          <tfoot><tr><td colspan="2">Total against entitlement</td><td class="c">${lrNum(d.used)}</td><td colspan="2"></td></tr></tfoot>
+        </table>`}
+
+    <p class="note">${d.hourly
+      ? 'Holiday for zero-hours staff accrues at 12.07% of hours worked. Hours used are estimated from days logged × average daily hours. Sickness and unpaid leave are shown for information and do not reduce the holiday pot.'
+      : `Accrual is calculated on the ${lrNum(s.allowance)}-day entitlement for the complete months of the leave year so far. “Days used” includes leave already booked for later in the year. Sickness${d.unpaid?' and unpaid leave are':' is'} recorded for information and ${d.unpaid?'do':'does'} not reduce holiday entitlement.`}</p>
+  </section>`;
+}
+
+function lrDocument(list) {
+  const co = COMPANIES[currentCompany];
+  return `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8">
+<title>Staff Leave Report — ${lrEsc(co.name)}</title>
+<style>
+  @page { size: A4 portrait; margin: 14mm 16mm 12mm 16mm; }
+  * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  body { margin: 0; font-family: Helvetica, Arial, sans-serif; color: #111; font-size: 12px; background: #e5e7eb; }
+  .page { background: #fff; width: 210mm; min-height: 297mm; margin: 12px auto; padding: 14mm 16mm; box-shadow: 0 2px 10px rgba(0,0,0,.12); }
+  @media print {
+    body { background: #fff; }
+    .page { width: auto; min-height: 0; margin: 0; padding: 0; box-shadow: none; break-after: page; page-break-after: always; }
+    .page:last-child { break-after: auto; page-break-after: auto; }
+  }
+  .co { display: flex; align-items: center; gap: 10px; padding-bottom: 6px; margin-bottom: 10px; border-bottom: 3px solid ${co.accent || '#1e3a5f'}; }
+  .co img { height: 34px; width: auto; }
+  .co-name { font-weight: 800; font-size: 12px; color: #1e3a5f; text-transform: uppercase; letter-spacing: .3px; }
+  .co-sub { font-size: 8px; color: #6b7280; }
+  h1 { margin: 0; font-size: 24px; color: #1e3a5f; }
+  .sub { color: #6b7280; font-size: 11.5px; margin: 3px 0 12px; }
+  .sub b { color: #374151; }
+  .tiles { display: grid; grid-template-columns: repeat(4, 1fr); border: 1px solid #d1d5db; }
+  .tile { text-align: center; padding: 12px 6px 10px; border-left: 1px solid #d1d5db; }
+  .tile:first-child { border-left: 0; }
+  .big { font-size: 27px; font-weight: 800; line-height: 1.1; }
+  .lab { font-size: 10.5px; color: #6b7280; margin-top: 6px; }
+  .navy { color: #1e3a5f; } .blue { color: #1d4ed8; } .red { color: #b91c1c; }
+  .good { color: #15803d; } .warn { color: #b45309; } .bad { color: #b91c1c; }
+  .blue-bg { background: #eff6ff; } .good-bg { background: #f0fdf4; } .warn-bg { background: #fffbeb; } .bad-bg { background: #fef2f2; }
+  .bar { display: flex; height: 18px; margin-top: 12px; border: 1px solid #d1d5db; overflow: hidden; }
+  .bar div { height: 100%; }
+  .legend { font-size: 11.5px; margin: 6px 0 10px; }
+  .muted { color: #6b7280; }
+  table { border-collapse: collapse; width: 100%; }
+  .facts th, .facts td { border: 1px solid #d1d5db; padding: 6px 8px; text-align: left; font-size: 11.5px; }
+  .facts th { background: #f3f4f6; width: 17%; white-space: nowrap; }
+  h2 { font-size: 15px; color: #1e3a5f; margin: 18px 0 8px; }
+  .bd th { background: #1e3a5f; color: #fff; font-size: 10.5px; text-align: left; padding: 7px 8px; }
+  .bd td { padding: 6px 8px; font-size: 11.5px; border-bottom: 1px solid #d1d5db; }
+  .bd tfoot td { background: #f3f4f6; font-weight: 800; border-top: 1.5px solid #1e3a5f; border-bottom: 0; }
+  .c { text-align: center !important; }
+  .note { font-size: 10px; color: #6b7280; margin-top: 10px; line-height: 1.45; }
+  .compact .bd td { padding: 3px 8px; font-size: 10.5px; }
+  .compact h2 { margin-top: 12px; }
+</style></head><body>
+${list.map(lrPage).join('\n')}
+</body></html>`;
+}
+
+// Which staff a selection means: 'all', one staff id, or an array of ids
+function lrStaffFor(sel) {
+  if (Array.isArray(sel)) { const ids = sel.map(Number); return staffList.filter(s => ids.includes(s.id)); }
+  return (!sel || sel === 'all') ? staffList.slice() : staffList.filter(s => s.id === parseInt(sel));
+}
+
+// Print (or Save as PDF) straight away, using a hidden frame — no pop-up needed
+function printLeaveReport(sel) {
+  const list = lrStaffFor(sel);
+  if (!list.length) { showToast('No staff selected'); return; }
+  let f = document.getElementById('lrPrintFrame');
+  if (f) f.remove();
+  f = document.createElement('iframe');
+  f.id = 'lrPrintFrame';
+  f.setAttribute('aria-hidden', 'true');
+  f.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden';
+  document.body.appendChild(f);
+  f.onload = () => {
+    setTimeout(() => { try { f.contentWindow.focus(); f.contentWindow.print(); } catch(e) { console.error(e); showToast('⚠ Could not open print — try the Reports tab'); } }, 300);
+  };
+  f.srcdoc = lrDocument(list);
+  showToast(list.length === 1 ? 'Opening leave report for ' + list[0].name : 'Opening leave reports for ' + list.length + ' staff (1 page each)');
+}
+
+// ── Picker: print all staff, a chosen few, or one person ──
+function openLeaveReportPicker() {
+  let m = document.getElementById('lrModal');
+  if (!m) {
+    m = document.createElement('div');
+    m.className = 'modal-overlay';
+    m.id = 'lrModal';
+    m.addEventListener('click', e => { if (e.target === m) closeLeaveReportPicker(); });
+    document.body.appendChild(m);
+  }
+  if (!staffList.length) { showToast('No staff set up for this company yet'); return; }
+  const co = COMPANIES[currentCompany];
+  m.innerHTML = `
+    <div class="modal" style="width:520px">
+      <h3>🧾 Print Staff Leave Reports</h3>
+      <p style="font-size:12px;color:var(--grey);margin:-8px 0 12px">${lrEsc(co.name)} · one A4 page per person. Tick the staff you want, or print one person on their own.</p>
+      <div style="display:flex;justify-content:space-between;align-items:center;font-size:11px;margin-bottom:6px">
+        <label style="display:flex;align-items:center;gap:6px;font-weight:700;cursor:pointer">
+          <input type="checkbox" id="lrAll" checked onchange="document.querySelectorAll('.lr-pick').forEach(c=>c.checked=this.checked);lrPickCount()"> Select all
+        </label>
+        <span id="lrCount" style="color:var(--grey)"></span>
+      </div>
+      <div style="border:1px solid var(--border);border-radius:6px;max-height:50vh;overflow:auto">
+        ${staffList.map(s => `
+          <div style="display:flex;align-items:center;gap:10px;padding:8px 12px;border-bottom:1px solid var(--border)">
+            <input type="checkbox" class="lr-pick" value="${s.id}" id="lrp-${s.id}" checked onchange="lrPickCount()">
+            <label for="lrp-${s.id}" style="flex:1;cursor:pointer;font-size:13px"><strong>${lrEsc(s.name)}</strong>
+              <span style="font-size:11px;color:var(--grey)">${lrEsc(s.title||'')}</span></label>
+            <button class="btn btn-ghost btn-sm" onclick="closeLeaveReportPicker();printLeaveReport(${s.id})" title="Print just ${lrEsc(s.name)}">🖨 Print</button>
+          </div>`).join('')}
+      </div>
+      <div class="modal-btns" style="flex-wrap:wrap">
+        <button class="btn btn-ghost" onclick="closeLeaveReportPicker()">Cancel</button>
+        <button class="btn btn-ghost" id="lrPrintSel" onclick="lrPrintSelected()">🖨 Print Selected</button>
+        <button class="btn btn-orange" onclick="closeLeaveReportPicker();printLeaveReport('all')">🖨 Print All Staff (${staffList.length})</button>
+      </div>
+    </div>`;
+  lrPickCount();
+  m.classList.add('open');
+}
+function closeLeaveReportPicker() { const m = document.getElementById('lrModal'); if (m) m.classList.remove('open'); }
+function lrPickedIds() { return [...document.querySelectorAll('.lr-pick:checked')].map(c => parseInt(c.value)); }
+function lrPickCount() {
+  const n = lrPickedIds().length, all = document.querySelectorAll('.lr-pick').length;
+  const c = document.getElementById('lrCount'); if (c) c.textContent = `${n} of ${all} selected`;
+  const a = document.getElementById('lrAll'); if (a) { a.checked = n === all; a.indeterminate = n > 0 && n < all; }
+  const b = document.getElementById('lrPrintSel'); if (b) { b.textContent = `🖨 Print Selected (${n})`; b.disabled = n === 0; b.style.opacity = n ? '1' : '.5'; }
+}
+function lrPrintSelected() {
+  const ids = lrPickedIds();
+  if (!ids.length) { showToast('Tick at least one person'); return; }
+  closeLeaveReportPicker();
+  printLeaveReport(ids);
+}
+
+// Reports tab: staff picker + live preview + print button
+function renderRptLeave(body) {
+  setRptHeader('🧾', 'Staff Leave Report');
+  body.innerHTML = '<div class="rpt-filters">' + fStaff('rptLeaveStaff', 'Staff Member', 'All Staff (1 page each)') +
+    '</div>';
+  const sel = fVal('rptLeaveStaff') || 'all';
+  const one = sel !== 'all' ? staffList.find(s => s.id === parseInt(sel)) : null;
+  body.querySelector('.rpt-filters').insertAdjacentHTML('beforeend',
+    `<div class="fg" style="align-self:flex-end;flex:0 0 auto;display:flex;flex-direction:row;gap:8px">
+      ${one ? `<button class="btn btn-orange" style="white-space:nowrap" onclick="printLeaveReport(${one.id})">🖨 Print ${lrEsc(one.name)}</button>` : ''}
+      <button class="btn ${one ? 'btn-ghost' : 'btn-orange'}" style="white-space:nowrap" onclick="printLeaveReport('all')">🖨 Print All Staff (${staffList.length})</button>
+      <button class="btn btn-ghost" style="white-space:nowrap" onclick="openLeaveReportPicker()" title="Tick which staff to print">☑ Choose Staff…</button>
+    </div>`);
+  const list = lrStaffFor(sel);
+  if (!list.length) { rptPlaceholder(body, 'No staff set up for this company yet'); return; }
+  const frame = document.createElement('iframe');
+  frame.title = 'Leave report preview';
+  frame.style.cssText = 'width:100%;height:78vh;border:1px solid var(--border);border-radius:8px;background:#e5e7eb';
+  frame.srcdoc = lrDocument(list);
+  body.appendChild(frame);
+
+  const csv = [['Employee','Company','Leave Year Start','Leave Year End','Entitlement','Accrued','Used','Remaining','Dates','Type','Days','Reason','Status']];
+  list.forEach(s => {
+    const d = lrData(s);
+    const head = [s.name, COMPANIES[currentCompany].name, lrFmt(d.ly.start), lrFmt(d.ly.end),
+      d.hourly ? '' : d.full, d.hourly ? '' : (d.accr == null ? '' : d.accr), d.used, d.hourly ? '' : d.rem];
+    if (!d.recs.length) csv.push(head.concat(['','','','','']));
+    d.recs.forEach(h => csv.push(head.concat([
+      h.from === h.to ? lrFmt(h.from) : lrFmt(h.from) + ' – ' + lrFmt(h.to),
+      h.type, h.days, h.notes || '', d.isPast(h) ? 'Taken' : 'Booked'])));
+  });
+  rptExportData = csv;
+}
+
+function rptPrint() {
+  if (currentReport === 'leavereport') { printLeaveReport(fVal('rptLeaveStaff') || 'all'); return; }
+  window.print();
 }
 
 // ════════════════════════════════════════
@@ -13090,7 +13415,28 @@ loadSubs();
   <ol>
     <li><span class="tag">Records by Employee</span> shows each person's holiday bookings and history.</li>
     <li><span class="tag">Remaining Holiday By Employee</span> gives you a running balance so you can see entitlement left at a glance.</li>
+    <li><span class="tag">🧾 Report</span> on any person's card prints their one-page Staff Leave Report.</li>
+    <li><span class="tag">🧾 Leave Reports</span> at the top of the tab lets you print everyone, a chosen few, or one person.</li>
   </ol>
+
+  <h2>Staff Leave Report</h2>
+  <p>A one-page A4 report per person — handy for a staff member's file, a return-to-work chat or year-end planning. It works for both companies: switch to <strong>TTP</strong> or <strong>Sunshine Windows</strong> in the company selector first, and the report uses that company's staff, name and logo.</p>
+  <ol>
+    <li><strong>Summary at the top:</strong> full-year entitlement, accrued so far, days used (including leave already booked) and days remaining, with a coloured bar showing holiday, bank holiday and other leave.</li>
+    <li><strong>Key figures:</strong> days taken to date, days booked for later in the year, sickness, and whether the person is ahead of or within their accrual.</li>
+    <li><strong>Leave breakdown below:</strong> every record in the leave year with dates, type, days, reason and whether it's taken or booked, plus the total counted against entitlement.</li>
+  </ol>
+  <p>You can print <strong>all reports</strong> in one go or <strong>individual reports</strong>:</p>
+  <ul>
+    <li><strong>All staff:</strong> Holidays tab → <span class="tag">🧾 Leave Reports</span> → <span class="tag">🖨 Print All Staff</span>. Each person prints on their own page.</li>
+    <li><strong>Chosen staff:</strong> Holidays tab → <span class="tag">🧾 Leave Reports</span>, tick the people you want → <span class="tag">🖨 Print Selected</span>.</li>
+    <li><strong>One person:</strong> <span class="tag">🖨 Print</span> next to their name in the same list, or <span class="tag">🧾 Report</span> on their card in <em>Remaining Holiday By Employee</em>.</li>
+    <li><strong>Preview first:</strong> Reports tab → <span class="tag">Staff Leave Report</span>, pick a person or All Staff to preview, then <span class="tag">🖨 Print [name]</span>, <span class="tag">🖨 Print All Staff</span> or <span class="tag">☑ Choose Staff…</span>.</li>
+  </ul>
+  <p>In the print window, choose your printer, or set the destination to <strong>Save as PDF</strong> to email it. If colours look washed out, tick <strong>Background graphics</strong> under More settings.</p>
+  <div class="note">
+    <strong>Good to know:</strong> sickness and unpaid leave are listed for the record but don't reduce holiday entitlement. Zero-hours staff get the same layout with their holiday shown in hours (12.07% accrual) instead of days. If someone has no leave year start date set, the report uses the calendar year and says so.
+  </div>
 
   <h2>3. Staff tab</h2>
   <p>Add, edit or remove staff records here — names, presets and any details used elsewhere in the tool.</p>
@@ -13113,7 +13459,7 @@ loadSubs();
   </ol>
 
   <h2>7. Reports tab</h2>
-  <p>Additional breakdowns and summaries beyond the core payroll report — use this if you need to dig into figures for a specific employee or period.</p>
+  <p>Additional breakdowns and summaries beyond the core payroll report — use this if you need to dig into figures for a specific employee or period. This includes the <span class="tag">Staff Leave Report</span> (one page per person) described above.</p>
 
   <div class="note">
     <strong>Data is shared and live.</strong> Because everything syncs to Supabase, changes you make (or that a colleague makes) appear for everyone with the tool open — there's no separate "save" file to email round.
