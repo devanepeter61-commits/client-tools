@@ -14701,7 +14701,26 @@ function addRow(){
   recalc();
 }
 
+// Keeps the invoice table sorted by Due Date, oldest at the top and newest
+// at the bottom, whenever rows are added, imported, or edited. Rows without
+// a due date yet (e.g. a freshly added blank row) sink to the bottom rather
+// than jumping to the top.
+function sortInvoiceRows(){
+  const container = document.getElementById('invoiceRows');
+  const rows = Array.from(container.querySelectorAll('tr'));
+  rows.sort((a, b) => {
+    const da = a.querySelector('.f-due').value;
+    const db = b.querySelector('.f-due').value;
+    if(!da && !db) return 0;
+    if(!da) return 1;
+    if(!db) return -1;
+    return da < db ? -1 : da > db ? 1 : 0;
+  });
+  rows.forEach(tr => container.appendChild(tr));
+}
+
 function recalc(){
+  sortInvoiceRows();
   const asAt = document.getElementById('asAtDate').value;
   const asAtDate = asAt ? new Date(asAt) : null;
   let current = 0, overdue = 0;
