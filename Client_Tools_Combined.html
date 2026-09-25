@@ -15310,8 +15310,12 @@ function parseAnnaStatement(lines){
   });
 
   function isCore(rec){
+    // Type codes seen on ANNA statements aren't a fixed set (DD, FP, POS, STO,
+    // BACS, CHG, ATM, TFR...), so accept any short alphabetic code rather than
+    // a hardcoded whitelist — a code we haven't seen before must not cause the
+    // whole row (and its payment) to be silently dropped.
     return /^\d{1,2}\s+[A-Za-z]{3}\s+\d{4}/.test(rec.processed.trim()) &&
-           /^(DD|FP|POS|STO)$/i.test(rec.type.trim()) &&
+           /^[A-Za-z]{2,6}$/.test(rec.type.trim()) &&
            (rec.paidout !== null || rec.paidin !== null);
   }
   function isFragment(rec){
