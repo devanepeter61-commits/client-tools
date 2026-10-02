@@ -2823,6 +2823,11 @@ renderContactSettings();
       </div>
       <label for="certassRefDate">Certass ref date <span style="font-weight:400;color:var(--muted);">(auto-filled from install date — edit if your certificate shows a different date)</span></label>
       <input type="date" id="certassRefDate">
+
+      <label style="display:flex;align-items:flex-start;gap:8px;font-weight:400;margin-top:10px;cursor:pointer;">
+        <input type="checkbox" id="noCertass" style="width:auto;margin-top:2px;">
+        <span>This install does not require a Certass Certificate — remove the Certass reference from the guarantee</span>
+      </label>
     </fieldset>
 
     <fieldset>
@@ -2911,8 +2916,23 @@ function resetForm(){
   });
   document.getElementById('uploadStatus').style.display = 'none';
   document.getElementById('certassFile').value = '';
+  document.getElementById('noCertass').checked = false;
+  toggleCertassFields();
   render();
 }
+
+function toggleCertassFields(){
+  const noCertass = document.getElementById('noCertass').checked;
+  el.certassNumber.disabled = noCertass;
+  el.certassRefDate.disabled = noCertass;
+  el.certassNumber.style.opacity = noCertass ? 0.45 : 1;
+  el.certassRefDate.style.opacity = noCertass ? 0.45 : 1;
+}
+
+document.getElementById('noCertass').addEventListener('change', () => {
+  toggleCertassFields();
+  render();
+});
 
 function updateSuggestedFilename(){
   const addressParts = [el.addrLine1.value, el.addrLine2.value, el.addrCounty.value, el.addrPostcode.value]
@@ -2973,6 +2993,8 @@ function annexBlock(){
 function render(){
   const commenceLong = fmtDateLong(el.commenceDate.value) || '—';
   const certassRefLong = el.certassRefDate.value ? fmtDateOrdinal(el.certassRefDate.value) : '—';
+  const noCertass = document.getElementById('noCertass').checked;
+  const certassLine = noCertass ? '' : `<br>Certass Ref ${el.certassNumber.value || '—'} ${certassRefLong}`;
 
   document.getElementById('sheets').innerHTML = `
   <div class="sheet">
@@ -2995,7 +3017,7 @@ function render(){
       </tr>
       <tr>
         <td><b>Commencement Date:</b>${commenceLong}</td>
-        <td><b>Reference:</b> Invoice ${el.invoiceRef.value || '—'}<br>Certass Ref ${el.certassNumber.value || '—'} ${certassRefLong}${el.productDesc.value ? '<br>' + el.productDesc.value : ''}</td>
+        <td><b>Reference:</b> Invoice ${el.invoiceRef.value || '—'}${certassLine}${el.productDesc.value ? '<br>' + el.productDesc.value : ''}</td>
       </tr>
     </table>
 
