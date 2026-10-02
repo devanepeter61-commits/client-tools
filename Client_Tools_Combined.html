@@ -3350,6 +3350,7 @@ document.getElementById('certassFile').addEventListener('change', async (e) => {
   .badge-post{background:#E6EEF4;color:#2C5B7A;}
   .badge-refund{background:var(--bad-bg);color:var(--bad);}
   .badge-other{background:var(--amber-bg);color:var(--amber);}
+  .badge-transfer{background:#E8E6F4;color:#4A3F8F;}
   .subgroup{margin-bottom:26px;}
   .subgroup:last-child{margin-bottom:0;}
   .helptext{font-size:12px;color:var(--muted);margin:0 0 12px;line-height:1.5;}
@@ -3501,7 +3502,7 @@ document.getElementById('certassFile').addEventListener('change', async (e) => {
       <div class="sub">The eBay "Transaction details" PDF for that payout</div>
     </div>
     <div class="step-body">
-      <p class="helptext">Drop the <b>Transaction Report</b> PDF below (or click to browse). It reads the payout ID, the "Scheduled payout to bank account" figure, and every Order / Postage label / Refund line straight off the PDF. Check the tables afterwards — PDF text extraction is best-effort, not perfect.</p>
+      <p class="helptext">Drop the <b>Transaction Report</b> PDF below (or click to browse). It reads the payout ID, the "Scheduled payout to bank account" figure, and every Order / Postage label / Refund / ANNA card top-up line straight off the PDF. Check the tables afterwards — PDF text extraction is best-effort, not perfect.</p>
       <div id="dropZone" class="dropzone">
         <div class="dz-icon">⬇</div>
         <div class="dz-text"><b>Click to choose a PDF</b> or drag it here</div>
@@ -3629,6 +3630,23 @@ document.getElementById('certassFile').addEventListener('change', async (e) => {
         <button class="btn btn-ghost btn-sm" onclick="addRow('other')">+ Add other charge</button>
       </div>
 
+      <div class="subgroup">
+        <p class="table-title"><span class="badge badge-transfer">ANNA</span> ANNA / card top-ups into eBay</p>
+        <p class="helptext" style="margin-top:-4px;">Money you paid <b>into</b> eBay from the ANNA card to cover refunds and postage labels. These appear as "Charge … From Mastercard … For refund cost / postage label cost" on the Transaction Report and are filled in automatically. They are not income or costs: they just top up the eBay account, so they bring the reconciliation back into line with the bank payout. Add any extra ones by hand (e.g. from the ANNA statement) if they are missing.</p>
+        <div class="table-wrap">
+        <table id="transfersTable">
+          <thead><tr>
+            <th style="width:22%">Charge ID</th>
+            <th style="width:48%">What it paid for</th>
+            <th class="num" style="width:26%">Amount £</th>
+            <th style="width:4%"></th>
+          </tr></thead>
+          <tbody></tbody>
+        </table>
+        </div>
+        <button class="btn btn-ghost btn-sm" onclick="addRow('transfers')">+ Add ANNA payment</button>
+      </div>
+
     </div>
   </div>
 
@@ -3680,7 +3698,7 @@ document.getElementById('certassFile').addEventListener('change', async (e) => {
 <div class="toast" id="toast"></div>
 
 <script>
-let state = { orders: [], postage: [], refunds: [], other: [] };
+let state = { orders: [], postage: [], refunds: [], other: [], transfers: [] };
 let rowId = 0;
 
 function newId(){ return 'r' + (rowId++); }
@@ -3691,6 +3709,7 @@ function addRow(kind, data){
   if(kind==='postage') state.postage.push({id, order:data?.order||'', fee:data?.fee??''});
   if(kind==='refunds') state.refunds.push({id, order:data?.order||'', customer:data?.customer||'', buyer:data?.buyer||'', refundId:data?.refundId||'', cancelId:data?.cancelId||'', reason:data?.reason||'', amount:data?.amount??'', feeRefund:data?.feeRefund??''});
   if(kind==='other') state.other.push({id, desc:data?.desc||'', amount:data?.amount??''});
+  if(kind==='transfers') state.transfers.push({id, ref:data?.ref||'', desc:data?.desc||'ANNA payment to eBay', amount:data?.amount??''});
   render();
 }
 function delRow(kind, id){
@@ -3748,6 +3767,15 @@ function render(){
       <td class="num"><input type="number" step="0.01" value="${r.amount}" oninput="updateField('other','${r.id}','amount',this.value)"></td>
       <td><button class="del-btn" onclick="delRow('other','${r.id}')" title="Remove row">✕</button></td>
     </tr>`).join('') || emptyRow(3);
+
+  const tb = document.querySelector('#transfersTable tbody');
+  tb.innerHTML = state.transfers.map(r=>`
+    <tr>
+      <td><input value="${esc(r.ref)}" oninput="updateField('transfers','${r.id}','ref',this.value)"></td>
+      <td class="name-cell"><input value="${esc(r.desc)}" oninput="updateField('transfers','${r.id}','desc',this.value)"></td>
+      <td class="num"><input type="number" step="0.01" value="${r.amount}" oninput="updateField('transfers','${r.id}','amount',this.value)"></td>
+      <td><button class="del-btn" onclick="delRow('transfers','${r.id}')" title="Remove row">✕</button></td>
+    </tr>`).join('') || emptyRow(4);
 }
 function emptyRow(cols){
   return `<tr><td colspan="${cols}" style="color:var(--muted);font-size:12.5px;padding:10px 8px;">No rows yet — add one, or paste &amp; parse the transaction report above.</td></tr>`;
@@ -3761,7 +3789,7 @@ const MONTHS = {Jan:'01',Feb:'02',Mar:'03',Apr:'04',May:'05',Jun:'06',Jul:'07',A
 
 function ingestText(text, opts){
   opts = opts || {};
-  let added = {orders:0, postage:0, refunds:0, other:0};
+  let added = {orders:0, postage:0, refunds:0, other:0, transfers:0};
 
   // --- headline "Scheduled payout to bank account" figure ---
   const headM = text.match(/£\s?([\d,]+\.\d{2})[\s\S]{0,60}?Scheduled\s+payout\s+to\s+bank\s+account/i);
@@ -3811,7 +3839,18 @@ function ingestText(text, opts){
     const idMatch = block.match(ORDER_ID_RE);
     const orderNo = idMatch ? idMatch[1] : '';
 
-    if(/Postage/i.test(block) && /label/i.test(block)){
+    // "Charge ..." rows are card top-ups into eBay (From Mastercard ending 3430 = ANNA) to fund refunds or
+    // postage labels. They must be caught FIRST, otherwise "For postage label cost" is mistaken for a postage
+    // label and "For refund cost" falls into Other charges.
+    const isCharge = /^\d{1,2}\s[A-Z][a-z]{2}\s\d{4}\s+\d{2}:\d{2}:\d{2}\s+Charge\b/.test(block);
+    if(isCharge){
+      const chIdM = block.match(/Charge\s+([\d-]+)/i);
+      const forM = block.match(/For\s+(refund cost|refund|postage label cost|postage label|[a-z ]{3,40})/i);
+      const forTxt = forM ? forM[1].trim().replace(/^./,c=>c.toUpperCase()) : 'Card top-up';
+      const amt = moneyMatches.length ? Math.abs(moneyMatches[0]) : 0;
+      addRow('transfers', {ref: chIdM?chIdM[1]:'', desc: 'ANNA payment — ' + forTxt, amount: amt.toFixed(2)});
+      added.transfers++;
+    } else if(/Postage/i.test(block) && /label/i.test(block)){
       const fee = moneyMatches.length ? Math.abs(moneyMatches[0]) : 0;
       addRow('postage', {order: orderNo, fee: fee.toFixed(2)});
       added.postage++;
@@ -3860,6 +3899,7 @@ function resetForNewDay(){
   state.postage = [];
   state.refunds = [];
   state.other = [];
+  state.transfers = [];
   document.getElementById('payoutId').value = '';
   document.getElementById('payoutDate').value = '';
   document.getElementById('bankAmount').value = '';
@@ -3874,12 +3914,13 @@ function parsePaste(){
   if(!text.trim()){ showToast('Paste the transaction report text first'); return; }
   resetForNewDay();
   const added = ingestText(text);
-  const total = added.orders+added.postage+added.refunds+added.other;
+  const total = added.orders+added.postage+added.refunds+added.other+added.transfers;
   if(total===0){
     showToast('Could not detect any rows — please enter manually');
   } else {
     let msg = `Parsed ${added.orders} order(s), ${added.postage} postage label(s), ${added.refunds} refund(s)`;
     if(added.other) msg += `, ${added.other} other charge(s)`;
+    if(added.transfers) msg += `, ${added.transfers} ANNA payment(s)`;
     showToast(msg + ' — please check them');
   }
 }
@@ -3923,7 +3964,7 @@ async function handlePdfFile(file){
     const buf = await file.arrayBuffer();
     const text = await extractPdfText(buf);
     const added = ingestText(text);
-    const total = added.orders+added.postage+added.refunds+added.other;
+    const total = added.orders+added.postage+added.refunds+added.other+added.transfers;
     dz.classList.add('loaded');
     if(total===0){
       status.textContent = file.name + ' — could not detect transaction rows, please check or use paste fallback';
@@ -3931,6 +3972,7 @@ async function handlePdfFile(file){
     } else {
       let statusMsg = `${file.name} — ${added.orders} order(s), ${added.postage} postage label(s), ${added.refunds} refund(s)`;
       if(added.other) statusMsg += `, ${added.other} other charge(s)`;
+      if(added.transfers) statusMsg += `, ${added.transfers} ANNA payment(s)`;
       status.textContent = statusMsg + ' loaded';
       showToast(added.other ? 'PDF read — note: other eBay charges found (e.g. subscription), check the Other table' : 'PDF read — please check the tables below, then Calculate');
     }
@@ -3957,6 +3999,7 @@ function calculate(){
   const postage = state.postage;
   const refunds = state.refunds;
   const other = state.other;
+  const transfers = state.transfers;
 
   if(orders.length===0 && refunds.length===0){
     showToast('Add at least one order line first');
@@ -3977,7 +4020,17 @@ function calculate(){
   const hasPostageFees = postageGross > 0.005;
   const hasOtherFees = otherGross > 0.005;
 
-  const netToBank = paymentToAuthorise - billTotal;
+  const transfersTotal = transfers.reduce((s,r)=>s+num(r.amount),0);
+  const netToBank = paymentToAuthorise - billTotal + transfersTotal;
+  const feeRefundsTotal = refunds.reduce((s,r)=>s+num(r.feeRefund),0);
+  const feesBeforeRefunds = orders.reduce((s,r)=>s+num(r.fee),0);
+  const netFeeCredit = billTotal < -0.005;
+  // When credit notes are bigger than the invoice there is nothing to "authorise as paid": the credit clears the
+  // invoice and the leftover credit is refunded in cash out of the eBay account.
+  const creditsExceed = paymentToAuthorise < -0.005;
+  const creditOnInvoice = creditsExceed ? saleTotal : creditTotal;
+  const refundDue = creditsExceed ? creditTotal - saleTotal : 0;
+  const payNow = creditsExceed ? 0 : paymentToAuthorise;
   const bankEntered = document.getElementById('bankAmount').value;
   const hasBankFigure = bankEntered !== '';
   const bankAmount = num(bankEntered);
@@ -4014,15 +4067,15 @@ function calculate(){
   const banner = document.getElementById('reconBanner');
   if(!hasBankFigure){
     banner.innerHTML = `<div class="recon-banner warn">
-      <div><div class="rtitle">⚠ No payout figure to check against</div><div class="rfig">Calculated net to bank: ${money(netToBank)} — add the "Scheduled payout to bank account" figure above to check it matches.</div></div>
+      <div><div class="rtitle">⚠ No payout figure to check against</div><div class="rfig">Calculated net to bank: ${money(netToBank)}${transfersTotal?' (includes '+money(transfersTotal)+' ANNA payments)':''} — add the "Scheduled payout to bank account" figure above to check it matches.</div></div>
     </div>`;
   } else if(Math.abs(variance) < 0.01){
     banner.innerHTML = `<div class="recon-banner ok">
-      <div><div class="rtitle">✓ Reconciles</div><div class="rfig">Calculated net (${money(netToBank)}) matches the bank amount (${money(bankAmount)})</div></div>
+      <div><div class="rtitle">✓ Reconciles</div><div class="rfig">Calculated net (${money(netToBank)}) matches the bank amount (${money(bankAmount)})${transfersTotal?' · includes '+money(transfersTotal)+' of ANNA payments':''}</div></div>
     </div>`;
   } else {
     banner.innerHTML = `<div class="recon-banner bad">
-      <div><div class="rtitle">✗ Does not match — check entries</div><div class="rfig">Calculated net: ${money(netToBank)} · Bank shows: ${money(bankAmount)} · Difference: ${money(variance)}</div></div>
+      <div><div class="rtitle">✗ Does not match — check entries</div><div class="rfig">Calculated net: ${money(netToBank)} · Bank shows: ${money(bankAmount)} · Difference: ${money(variance)}${transfers.length===0 && Math.abs(variance)>0.01 ? ' · No ANNA payments entered — if card top-ups funded refunds/postage, add them below.' : ''}</div></div>
     </div>`;
   }
 
@@ -4031,7 +4084,7 @@ function calculate(){
     <div class="card c1"><div class="clabel">Sale invoice</div><div class="camount">${money(saleTotal)}</div><div class="cnote">${orders.length} order${orders.length!==1?'s':''}</div></div>
     <div class="card c4"><div class="clabel">Credits</div><div class="camount">${money(creditTotal)}</div><div class="cnote">${refunds.length} refund${refunds.length!==1?'s':''}</div></div>
     <div class="card c2"><div class="clabel">Postage &amp; Fees bill</div><div class="camount">${money(billTotal)}</div><div class="cnote">Order ${money(orderFeesGross)} + Post ${money(postageGross)}${hasOtherFees?' + Other '+money(otherGross):''}</div></div>
-    <div class="card c3"><div class="clabel">Net to bank</div><div class="camount">${money(netToBank)}</div><div class="cnote">Payment authorised − Bill</div></div>
+    <div class="card c3"><div class="clabel">Net to bank</div><div class="camount">${money(netToBank)}</div><div class="cnote">Payment authorised − Bill${transfersTotal?' + ANNA '+money(transfersTotal):''}</div></div>
   `;
 
   // Action blocks
@@ -4039,22 +4092,24 @@ function calculate(){
 
   // 1. SALE
   html += `<div class="action-block">
-    <div class="action-head"><div class="action-num">1</div><h3>Sales invoice — authorise payment</h3><div class="xero-tag">Sales → Invoices → Awaiting Payment</div></div>
+    <div class="action-head"><div class="action-num">1</div><h3>${creditsExceed?'Sales invoice — cleared by the credit note':'Sales invoice — authorise payment'}</h3><div class="xero-tag">Sales → Invoices → Awaiting Payment</div></div>
     <div class="action-body">
       <div class="kv"><span class="k">Search</span><span class="v">eBay</span></div>
       <div class="kv"><span class="k">Invoice total (all order lines)</span><span class="v">${money(saleTotal)}</span></div>
-      <div class="kv"><span class="k">Less credit note(s)</span><span class="v">${creditTotal>0?'-'+money(creditTotal):money(0)}</span></div>
-      <div class="kv"><span class="k">Amount to authorise as paid</span><span class="v big">${money(paymentToAuthorise)}</span></div>
+      <div class="kv"><span class="k">${creditsExceed?'Credit note allocated to this invoice':'Less credit note(s)'}</span><span class="v">${creditOnInvoice>0?'-'+money(creditOnInvoice):money(0)}</span></div>
+      <div class="kv"><span class="k">Amount to authorise as paid</span><span class="v big">${money(payNow)}</span></div>
       <div class="kv"><span class="k">Date paid</span><span class="v">${payoutDateDisp}</span></div>
       <div class="kv"><span class="k">Reference</span><span class="v">${esc(payoutId)}</span></div>
       <div class="kv"><span class="k">Bank account</span><span class="v">eBay</span></div>
+      ${creditsExceed ? `<div class="kv"><span class="k">Credit left over — refund from the eBay account</span><span class="v big">${money(refundDue)}</span></div>
+      <div class="flag"><b>Credit notes are bigger than this invoice</b> (${money(creditTotal)} of credit against ${money(saleTotal)} of sales), so no payment is made on the invoice. Allocate ${money(saleTotal)} of the credit note to the invoice, then use <b>Add cash refund</b> on the credit note for the remaining ${money(refundDue)} — account eBay, date ${payoutDateDisp}, reference ${esc(payoutId)}.</div>` : ''}
     </div>
   </div>`;
 
   // 2. CREDIT NOTES
   if(refunds.length){
     html += `<div class="action-block">
-      <div class="action-head"><div class="action-num">2</div><h3>Credit note — before authorising payment</h3><div class="xero-tag">Create and Apply Credit · Tax Inclusive</div></div>
+      <div class="action-head"><div class="action-num">2</div><h3>Credit note — ${creditsExceed?'allocate, then refund the rest':'before authorising payment'}</h3><div class="xero-tag">Create and Apply Credit · Tax Inclusive</div></div>
       <div class="action-body">
         <p class="helptext" style="margin-top:-4px;">One credit note against invoice <b>${esc(payoutId)}</b>, with one line per refunded/cancelled order. Enter the amount below with <b>Tax Inclusive</b> selected.</p>
         ${refunds.map(r=>{
@@ -4086,8 +4141,29 @@ function calculate(){
   }
 
   // 3. FEES BILL (create + pay — merged into one block so it can't be read as two separate bills)
+  const feeBlockNum = refunds.length?3:2;
+  if(netFeeCredit){
+    const grossBill = feesBeforeRefunds + postageGross + otherGross;
+    html += `<div class="action-block">
+    <div class="action-head"><div class="action-num">${feeBlockNum}</div><h3>eBay fees net to a CREDIT this payout</h3><div class="xero-tag">Purchases → Bill + Supplier Credit Note</div></div>
+    <div class="action-body">
+      <p class="helptext" style="margin:-2px 0 12px;">Fee refunds on cancelled/refunded orders (${money(feeRefundsTotal)}) are bigger than the fees and postage charged (${money(grossBill)}), so Xero can't take this as a normal bill. Raise it as a bill plus a supplier credit note (all <b>Tax Inclusive</b>), allocate the credit to the bill, and the leftover is cash coming back from eBay.</p>
+      <div class="mini-step-label">A. Bill from eBay</div>
+      ${feesBeforeRefunds>0.005?`<div class="kv"><span class="k">Order line — Cost of Goods Sold, tracking: EBAY SALES / TTP</span><span class="v">${money(feesBeforeRefunds)}</span></div>`:''}
+      ${hasPostageFees?`<div class="kv"><span class="k">Postage line — Postage, Freight &amp; Courier, tracking: EBAY SALES / TTP</span><span class="v">${money(postageGross)}</span></div>`:''}
+      ${hasOtherFees?other.map(r=>`<div class="kv"><span class="k">${esc(r.desc)} — confirm account</span><span class="v">${money(num(r.amount))}</span></div>`).join(''):''}
+      <div class="kv"><span class="k">Bill total</span><span class="v big">${money(grossBill)}</span></div>
+      <div class="mini-step-label" style="margin-top:16px;">B. Supplier credit note from eBay</div>
+      <div class="kv"><span class="k">Order fees refunded — Cost of Goods Sold, tracking: EBAY SALES / TTP</span><span class="v">${money(feeRefundsTotal)}</span></div>
+      <div class="mini-step-label" style="margin-top:16px;">C. Allocate &amp; settle</div>
+      <div class="kv"><span class="k">Allocate credit to the bill</span><span class="v">${money(grossBill)}</span></div>
+      <div class="kv"><span class="k">Remaining credit received from eBay (bank account: eBay)</span><span class="v big">${money(-billTotal)}</span></div>
+      <div class="kv"><span class="k">Date &amp; reference</span><span class="v">${payoutDateDisp} · ${esc(payoutId)} ORDER/POST FEES</span></div>
+    </div>
+  </div>`;
+  } else {
   html += `<div class="action-block">
-    <div class="action-head"><div class="action-num">${refunds.length?3:2}</div><h3>Purchases bill — ${billLabel}</h3><div class="xero-tag">Purchases → New Bill → From EBAY</div></div>
+    <div class="action-head"><div class="action-num">${feeBlockNum}</div><h3>Purchases bill — ${billLabel}</h3><div class="xero-tag">Purchases → New Bill → From EBAY</div></div>
     <div class="action-body">
       <p class="helptext" style="margin:-2px 0 12px;"><b>One bill, two steps below</b> — raise it (A), then approve &amp; pay it (B). Enter these amounts with <b>Tax Inclusive</b> selected — the figures shown already include VAT, so type them straight in.</p>
 
@@ -4107,14 +4183,33 @@ function calculate(){
       <div class="kv"><span class="k">Amount</span><span class="v big">${money(billTotal)}</span></div>
     </div>
   </div>`;
+  }
 
+  // 4. ANNA / CARD TOP-UPS
+  if(transfers.length){
+    const tNum = feeBlockNum + 1;
+    html += `<div class="action-block">
+    <div class="action-head"><div class="action-num">${tNum}</div><h3>Bank transfer — ANNA payments into eBay</h3><div class="xero-tag">Bank account → Transfer Money · ANNA → eBay</div></div>
+    <div class="action-body">
+      <p class="helptext" style="margin:-2px 0 12px;">These card top-ups paid for refunds and postage labels. In Xero record them as <b>transfers from ANNA to eBay</b> (not as income or expenses). Without them the eBay account would not agree to the payout.</p>
+      ${transfers.map(r=>`<div class="kv"><span class="k">${esc(r.desc)}${r.ref?' · '+esc(r.ref):''}</span><span class="v">${money(num(r.amount))}</span></div>`).join('')}
+      <div class="kv"><span class="k">Transfer total (From ANNA, To eBay)</span><span class="v big">${money(transfersTotal)}</span></div>
+      <div class="kv"><span class="k">Date &amp; reference</span><span class="v">${payoutDateDisp} · ${esc(payoutId)} ANNA</span></div>
+      <div class="flag"><b>Tip:</b> you can enter one transfer for the total, or one per charge if you want each to match the ANNA statement line by line.</div>
+    </div>
+  </div>`;
+  }
 
   document.getElementById('actionBlocks').innerHTML = html;
 
   // copy summary
   let summary = `eBay Reconciliation — ${payoutId} — ${payoutDateDisp}\n`;
   summary += `${'-'.repeat(48)}\n`;
-  summary += `1) SALES INVOICE\n   Total: ${money(saleTotal)}   Authorise paid: ${money(paymentToAuthorise)}\n   Ref: ${payoutId}   Bank: eBay\n\n`;
+  if(creditsExceed){
+    summary += `1) SALES INVOICE — cleared by credit note\n   Total: ${money(saleTotal)}   Credit allocated: ${money(saleTotal)}   Paid: £0.00\n   Credit left over, refund from eBay account: ${money(refundDue)}   Ref: ${payoutId}\n\n`;
+  } else {
+    summary += `1) SALES INVOICE\n   Total: ${money(saleTotal)}   Authorise paid: ${money(paymentToAuthorise)}\n   Ref: ${payoutId}   Bank: eBay\n\n`;
+  }
   if(refunds.length){
     summary += `2) CREDIT NOTE (against invoice ${payoutId})\n`;
     refunds.forEach(r=>{
@@ -4132,13 +4227,26 @@ function calculate(){
     });
     summary += `   Credit note total: ${money(creditTotal)}\n\n`;
   }
-  summary += `${refunds.length?'3':'2'}) PURCHASES BILL (${billLabel.replace('&amp;','&')}) — create, then pay the same bill\n`;
+  if(netFeeCredit){
+    const grossBill = feesBeforeRefunds + postageGross + otherGross;
+    summary += `${feeBlockNum}) EBAY FEES NET TO A CREDIT\n`;
+    summary += `   A. Bill (Tax Inclusive): Order fees ${money(feesBeforeRefunds)} + Postage ${money(postageGross)}${hasOtherFees?' + Other '+money(otherGross):''} = ${money(grossBill)}\n`;
+    summary += `   B. Supplier credit note: fee refunds ${money(feeRefundsTotal)}\n`;
+    summary += `   C. Allocate credit to bill; remaining ${money(-billTotal)} received from eBay   Ref: ${payoutId} ORDER/POST FEES\n\n`;
+  } else {
+  summary += `${feeBlockNum}) PURCHASES BILL (${billLabel.replace('&amp;','&')}) — create, then pay the same bill\n`;
   summary += `   A. Create bill (Tax Inclusive):\n`;
   if(hasOrderFees) summary += `      Order (COGS): ${money(orderFeesGross)}\n`;
   if(hasPostageFees) summary += `      Postage: ${money(postageGross)}\n`;
   if(hasOtherFees) other.forEach(r=> summary += `      ${r.desc} (confirm account): ${money(num(r.amount))}\n`);
   summary += `      Total: ${money(billTotal)}   Ref: ${billRef}\n`;
   summary += `   B. Record payment: From eBay   Amount: ${money(billTotal)}   Ref: ${billRef}\n\n`;
+  }
+  if(transfers.length){
+    summary += `${feeBlockNum+1}) BANK TRANSFER — ANNA to eBay (not income/expense)\n`;
+    transfers.forEach(r=> summary += `   ${r.desc}${r.ref?' ('+r.ref+')':''}: ${money(num(r.amount))}\n`);
+    summary += `   Transfer total: ${money(transfersTotal)}   Ref: ${payoutId} ANNA\n\n`;
+  }
   summary += `Net to bank: ${money(netToBank)}`;
   if(hasBankFigure) summary += `   |   Bank shows: ${money(bankAmount)}   |   ${Math.abs(variance)<0.01 ? 'MATCHES ✓' : 'VARIANCE: '+money(variance)+' ✗'}`;
 
@@ -4146,7 +4254,7 @@ function calculate(){
   document.getElementById('results').classList.add('show');
   document.getElementById('results').scrollIntoView({behavior:'smooth', block:'start'});
 
-  window._lastCalc = {payoutId, payoutDate, saleTotal, creditTotal, paymentToAuthorise, billTotal, netToBank, bankAmount: hasBankFigure?bankAmount:null, orderFeesGross, postageGross, otherGross};
+  window._lastCalc = {payoutId, payoutDate, saleTotal, creditTotal, paymentToAuthorise, billTotal, netToBank, bankAmount: hasBankFigure?bankAmount:null, orderFeesGross, postageGross, otherGross, transfersTotal};
 }
 
 function copySummary(){
@@ -4159,7 +4267,7 @@ async function saveReport(){
   if(!window._lastCalc){ showToast('Calculate first'); return; }
   const c = window._lastCalc;
   const key = 'ebay-day:' + (c.payoutId || Date.now());
-  const payload = {...c, orders: state.orders, postage: state.postage, refunds: state.refunds, other: state.other, savedAt: new Date().toISOString()};
+  const payload = {...c, orders: state.orders, postage: state.postage, refunds: state.refunds, other: state.other, transfers: state.transfers, savedAt: new Date().toISOString()};
   try{
     await window.storage.set(key, JSON.stringify(payload), false);
     showToast('Day saved');
@@ -4237,6 +4345,7 @@ function loadReport(jsonStr){
   state.postage = (it.postage||[]).map(r=>({...r, id:newId()}));
   state.refunds = (it.refunds||[]).map(r=>({...r, id:newId()}));
   state.other = (it.other||[]).map(r=>({...r, id:newId()}));
+  state.transfers = (it.transfers||[]).map(r=>({...r, id:newId()}));
   render();
   calculate();
   showToast('Day reloaded');
@@ -13310,7 +13419,7 @@ loadSubs();
 <script type="text/plain" id="guide-invoiced">JVBERi0xLjQKJZOMi54gUmVwb3J0TGFiIEdlbmVyYXRlZCBQREYgZG9jdW1lbnQgKG9wZW5zb3VyY2UpCjEgMCBvYmoKPDwKL0YxIDIgMCBSIC9GMiAzIDAgUgo+PgplbmRvYmoKMiAwIG9iago8PAovQmFzZUZvbnQgL0hlbHZldGljYSAvRW5jb2RpbmcgL1dpbkFuc2lFbmNvZGluZyAvTmFtZSAvRjEgL1N1YnR5cGUgL1R5cGUxIC9UeXBlIC9Gb250Cj4+CmVuZG9iagozIDAgb2JqCjw8Ci9CYXNlRm9udCAvSGVsdmV0aWNhLUJvbGQgL0VuY29kaW5nIC9XaW5BbnNpRW5jb2RpbmcgL05hbWUgL0YyIC9TdWJ0eXBlIC9UeXBlMSAvVHlwZSAvRm9udAo+PgplbmRvYmoKNCAwIG9iago8PAovQ29udGVudHMgOCAwIFIgL01lZGlhQm94IFsgMCAwIDU5NS4yNzU2IDg0MS44ODk4IF0gL1BhcmVudCA3IDAgUiAvUmVzb3VyY2VzIDw8Ci9Gb250IDEgMCBSIC9Qcm9jU2V0IFsgL1BERiAvVGV4dCAvSW1hZ2VCIC9JbWFnZUMgL0ltYWdlSSBdCj4+IC9Sb3RhdGUgMCAvVHJhbnMgPDwKCj4+IAogIC9UeXBlIC9QYWdlCj4+CmVuZG9iago1IDAgb2JqCjw8Ci9QYWdlTW9kZSAvVXNlTm9uZSAvUGFnZXMgNyAwIFIgL1R5cGUgL0NhdGFsb2cKPj4KZW5kb2JqCjYgMCBvYmoKPDwKL0F1dGhvciAoQ2xpZW50IFRvb2xzKSAvQ3JlYXRpb25EYXRlIChEOjIwMjYwNzI4MTIzNTQzKzAwJzAwJykgL0NyZWF0b3IgKFwodW5zcGVjaWZpZWRcKSkgL0tleXdvcmRzICgpIC9Nb2REYXRlIChEOjIwMjYwNzI4MTIzNTQzKzAwJzAwJykgL1Byb2R1Y2VyIChSZXBvcnRMYWIgUERGIExpYnJhcnkgLSBcKG9wZW5zb3VyY2VcKSkgCiAgL1N1YmplY3QgKFwodW5zcGVjaWZpZWRcKSkgL1RpdGxlIChNb250aGx5IEludm9pY2VkIENsaWVudHMgXDIwNCBTdGF0ZW1lbnQgTWFrZXIgXDIwNCBIb3cgVG8pIC9UcmFwcGVkIC9GYWxzZQo+PgplbmRvYmoKNyAwIG9iago8PAovQ291bnQgMSAvS2lkcyBbIDQgMCBSIF0gL1R5cGUgL1BhZ2VzCj4+CmVuZG9iago4IDAgb2JqCjw8Ci9GaWx0ZXIgWyAvQVNDSUk4NURlY29kZSAvRmxhdGVEZWNvZGUgXSAvTGVuZ3RoIDE3MjcKPj4Kc3RyZWFtCkdhdG07Z04oYjYmOk1sK0ZSXT9jMislJTFtOEctXEtgWV1yWjBZTlE3QnNrO0xubyQmLGBNYlBjXHNLQkxxTzpPVXVHTEZSRCwxVGg6JDUnTS1pbypjM3BBNTB0ZlFTYUtkNyRPUUBCNWBVRSY2SHVzXkdbNis/NkUuJEU7Xl5naShuZm8tbFdhVTNeQlkuZmJOb15CUkA4SCtBIUskK2VMcFZJW09CWHUmOXBWYjlmTGwvKGViY2haNUs0RDBTXDtlMjksbSduM3I9TSFITHB0ImFtNWk9SiMycS4xPzAkc0dGMmkvNlc1TmwkO0htc3EvMFU6cWI/PGxaKmgmYUEnNSpgPG0sa1hEcComXVMkUz5jalZdUiFnIjpGRSxvJXMiZ19pIUZPUERPMCVoaClObDpuVm9TKD82YERELG5qRGlSRkFVKi8lcSVGNSxTLUtUP1M4JiJGXCI4VFhyPGUpaD0pN0pjdGZRQEUjZSpuN2UmOTpFbDduQSI6X29rKmE7Yjc6JE01M2dKM2kvK19hc3NzRSk5RT9rPiZdJEVGLF5gOjoxUUxwO0JrP14vIUtsZnFnU0AqKDRtQFRuZGNEKGZfNipzZVdiPD5mMGg6OFxPXDM/XVw6XkZiKUNzZHFDb0FMW1VaRGxSVnMtb2I/N2M5KVowRlBdWCs/UGxcUkpzWnJJZExHTGJMOidYbmY4WkdHISRTZDwnKUM3LlhDJ1c3UEQhSD5CLztvMjFmRltkLC9Hc2E2TmlFPkIyKE5oMG49aW9sIzxpMTZySkp1TCFfLjhrOypra2AlLkFMJTthPTxaUGIjcV8hWiItRXVDRydNI2RCVCdsT29UPStrW1IzKSdyQS1nKDBSNS08YDJnc11MWC5qYW4qZDkhLWdnITNzJmUzI2YnOV0wKkw0YFAwSXBQYHNrQkpKV3MvK1EzMyNFNz1OYmU/TlNuMC0jImlyUFonVzdjWnRMKElCOD5XLURoXWxeUTdGS1IxZD1BNWtTUG5CcjNdSDpcbjg8OG5pb2FOVjZ1J21YXzVVNG9lPHREOipHOFRmR3FqM3NNc1JkL1oqXlRbTzdORUo0cTUlLU9zTzxqR0JPQyRXKzZUSUs/U25dO2twTidqN0ZdPG1oY0JyZjlTU3MyMHVLQmZIbDpiQz8xMGYoTXJBWypeJjRuPFZtTzJwN0I+dXUvdG8zPkVNZmYoN0A+ZkU4I2E5TmFYZVErKHI1azBEYCddRDMrYlw8XDErMVgsJkYxLEouaVQuQElJOFtCbkZyaEhXMWZLaGgpZUJZLCJJXEBYQlAqKk9ZRShRQGIpIVleKjJcYDhcXEJAJGgjbC5FV3FoPzpOMGFta01aLjAlIU9mIShUTWwhKjdCL3FgUXJmKmo9XjwyTEFYXG45TGBrUEYmZSY+Yz9LXD1yTj0kRWdSUV9dMT9CYE4hYE0hZGhIZixdYiYmPkJsNFJXaS9KVGhZaEc7IjoqWFBpIW9cVDNQWFwwM1wvQUg7cDFjVlg0MWhmK25mU3ArYiohRFU7RD0kNU5pNF5kZFdoWi86WSNfbW5yZ1JbNCQ/aUJlcEVYRDlcM1BQU0JaS2wpMF5bMDBEWlUtPi8sI1FFUUZsMlZpJjFiVEcpUyluVj5AXzpsUVk/M2tXY0FYMlM7NW1RKkhKdD5qSUctL2FGMm9KO1U6YiEzaVhDJyRMaHFUZiVDQ0g2TCE5dU8kUSs0MV4sazUhWk1yYy5bTkAnUTBuMz1ON1JCLmg2QkY0Q3VlJ185aCpYQFpCOXBmZk1OS2NgbjNWMU83dUBZcioyREQ8YSVVKSFTciIsKkFeL3BOMjklK101UnRXN2FsNSRtLGV1YWY3aU9pN04tXDMzYjYvJW5JbWJSQF5bMkBEUkVjZFRTbFxNSGhbIVckQS5zVGBFaEBLZCZrRW1uWEssWlEnQGFjVUsyODtuc1hgVTtvcTooZU5ibj9fLFtqS0FuW2xgZyVIQlowTD1UcUMialFPa0E4XUBLVGFuMUtDVFhMOyxuIiNGQHNjZTJYJDhqbioxTmFLQyhsQUNEayhnKldFYm8pJ1BhNzc6Xyk9SGtRXS03Tj07OyhrSUokVltIdD0lQVM1SycyQ2RlRjo3NnBbNWxsIWZXbWxrVmBkR1RVTSlSdXF0ODxUW21dbCI9YChvTDU7ZkxwVGZFWks6MWQzYV0xXzZeRjNoZ0FDUEhSbG9eIywuTVM6OjBrMiZlLlU5PS1pU1BzTmRFYTUkPGNEbj1yXE1IYz1tY09pb2NPVzc7MEhMKXNjbDw2KH4+ZW5kc3RyZWFtCmVuZG9iagp4cmVmCjAgOQowMDAwMDAwMDAwIDY1NTM1IGYgCjAwMDAwMDAwNjEgMDAwMDAgbiAKMDAwMDAwMDEwMiAwMDAwMCBuIAowMDAwMDAwMjA5IDAwMDAwIG4gCjAwMDAwMDAzMjEgMDAwMDAgbiAKMDAwMDAwMDUyNCAwMDAwMCBuIAowMDAwMDAwNTkyIDAwMDAwIG4gCjAwMDAwMDA5MTUgMDAwMDAgbiAKMDAwMDAwMDk3NCAwMDAwMCBuIAp0cmFpbGVyCjw8Ci9JRCAKWzwwZDAwM2IzNjFjNjBmZTQ0ZjFlYTJmYmE0YWY2NzU0Mj48MGQwMDNiMzYxYzYwZmU0NGYxZWEyZmJhNGFmNjc1NDI+XQolIFJlcG9ydExhYiBnZW5lcmF0ZWQgUERGIGRvY3VtZW50IC0tIGRpZ2VzdCAob3BlbnNvdXJjZSkKCi9JbmZvIDYgMCBSCi9Sb290IDUgMCBSCi9TaXplIDkKPj4Kc3RhcnR4cmVmCjI3OTIKJSVFT0YK</script>
 <script type="text/plain" id="guide-csv">JVBERi0xLjQKJZOMi54gUmVwb3J0TGFiIEdlbmVyYXRlZCBQREYgZG9jdW1lbnQgKG9wZW5zb3VyY2UpCjEgMCBvYmoKPDwKL0YxIDIgMCBSIC9GMiAzIDAgUgo+PgplbmRvYmoKMiAwIG9iago8PAovQmFzZUZvbnQgL0hlbHZldGljYSAvRW5jb2RpbmcgL1dpbkFuc2lFbmNvZGluZyAvTmFtZSAvRjEgL1N1YnR5cGUgL1R5cGUxIC9UeXBlIC9Gb250Cj4+CmVuZG9iagozIDAgb2JqCjw8Ci9CYXNlRm9udCAvSGVsdmV0aWNhLUJvbGQgL0VuY29kaW5nIC9XaW5BbnNpRW5jb2RpbmcgL05hbWUgL0YyIC9TdWJ0eXBlIC9UeXBlMSAvVHlwZSAvRm9udAo+PgplbmRvYmoKNCAwIG9iago8PAovQ29udGVudHMgOCAwIFIgL01lZGlhQm94IFsgMCAwIDU5NS4yNzU2IDg0MS44ODk4IF0gL1BhcmVudCA3IDAgUiAvUmVzb3VyY2VzIDw8Ci9Gb250IDEgMCBSIC9Qcm9jU2V0IFsgL1BERiAvVGV4dCAvSW1hZ2VCIC9JbWFnZUMgL0ltYWdlSSBdCj4+IC9Sb3RhdGUgMCAvVHJhbnMgPDwKCj4+IAogIC9UeXBlIC9QYWdlCj4+CmVuZG9iago1IDAgb2JqCjw8Ci9QYWdlTW9kZSAvVXNlTm9uZSAvUGFnZXMgNyAwIFIgL1R5cGUgL0NhdGFsb2cKPj4KZW5kb2JqCjYgMCBvYmoKPDwKL0F1dGhvciAoQ2xpZW50IFRvb2xzKSAvQ3JlYXRpb25EYXRlIChEOjIwMjYwNzI4MTIzNTQzKzAwJzAwJykgL0NyZWF0b3IgKFwodW5zcGVjaWZpZWRcKSkgL0tleXdvcmRzICgpIC9Nb2REYXRlIChEOjIwMjYwNzI4MTIzNTQzKzAwJzAwJykgL1Byb2R1Y2VyIChSZXBvcnRMYWIgUERGIExpYnJhcnkgLSBcKG9wZW5zb3VyY2VcKSkgCiAgL1N1YmplY3QgKFwodW5zcGVjaWZpZWRcKSkgL1RpdGxlIChQREYgdG8gQ1NWIENvbnZlcnRlciBcMjA0IEhvdyBUbykgL1RyYXBwZWQgL0ZhbHNlCj4+CmVuZG9iago3IDAgb2JqCjw8Ci9Db3VudCAxIC9LaWRzIFsgNCAwIFIgXSAvVHlwZSAvUGFnZXMKPj4KZW5kb2JqCjggMCBvYmoKPDwKL0ZpbHRlciBbIC9BU0NJSTg1RGVjb2RlIC9GbGF0ZURlY29kZSBdIC9MZW5ndGggMTYxNQo+PgpzdHJlYW0KR2F0bTs+QmVPVSY6WClPUik/Z1ppM15NcGgrckJqIlZxVEcibVRDZVRlRUZAMyEuaSwtK1AzIUlSaXJUMkteb2BUSyxfXz8wOl8mMmtwcmMoSSxpZWs3dGVVJSViM1w1V20rZzVRVzxgbG9pIyg6QDprSltrXlBxNU9wcG1VWSRgKFBpPVRrRmtlWkJdRSJKOy1bdENhWSI5ZmojJElJaDgyPWpFXEo4bEtKQEpYNEJCMV9raG5PU15SNmMiPXAmNWtJNFBdXG9lUnM4YDJoL05TR2tEY1YwOUE9UUFwaFBDTiUkcS5SbVBtZUVSPkk1ImdLIWUxclxpVm5aOScnQ1dfRWpmOlc7Oz9pTFN1VTp0ODwxTzdhVTA2WWRbITkvNy1gQVIpb1VAUlFuOFNwbXEmOzVsUkw1OkhpLSFWT1IrIWtHQ0lyTEBicGN1WGI+WC0yLSYkVTVKWWs4UzE5JEInbSphKC8mN2IubnBCUjhFdDwuYVkvZkI+MCRUISpDXGcsTm9aPzM+Jk9XMlNpPVhELEAhSCFTM1g4OWYtInEjWUw4PztkMlhGSmpHVCg6VVtNJDsrN0EuVFU+LSRKUkdhZjkhSWxpZidcRz1SMCNMNT42c2wncHEtc19dSWFkN2M3MW9LOjhAKyZWdSRMNWNFa01nVVpaMjs5Ki50bVtFLVdMLmkiWlRHRCg0QjxOVGsqYnI2VFByP15QPTplWl8wO1I1Qz85PShSMFdzXyE2YURSPlw6N3FVcmUsY01uIj1tQ182S0hAV0YqPnRlc1djRF1pSjdKPmxpT285P0QzT2U2SzcpOm8lN007P1xNdTFCaldhM0NWZmA4Qm1zaGFHUy81K1o8Uy5HJzBsYC4hZCNnXm48aT9WTSdOV1BYPVM3ZTVoSTwzLywkK3EsYWVQZytxMVNZXXQyRiRnRGtZclInM3NsYyxVMj90XyEkIihpKSskKlRWK0ZTVl9yXF04OTQ7bEgyTmNGNjszMz06Nlthcz9BS2xsVi9WOEJpOnJwVkxOZUkiZXFtPkUmIjc1W1oiOUJLIiNJLEorUDNjK1w+ci9dRy4vQUQncVptLkJDbVFLP0U7VzNvbmUhNStIXFQhTjhBbjA7PGNkQj8qJGkjJDhUMipbQkgjK2NsaT5aOywiVU8tSXVqZC9JJCkub0pwJThiQ1wtcnFrJHEqIT1rXDYzWT9jLW1RWT1mO2s4ciJEMEg4PEdeOVlMVDEsMVA0cm81YlNscmJmZFNzRFhnNTY5ITZfJjZtWClcPXFoU3FucD1GKjlJP3F0MVxXc1wtND9dREFsUlhUIy1GMTQ9cW8yImwkLmw2YDs6OismS1pldT1PI1pMNTVcSzhjT1pbdCtndU1Ca2dIIScxSDhtKS4hajJqNDNZZm5DK0E8YiVsUU1VKDFYdGUnaVpnSzc7WEg9LEhRPU5TWyxVPCMzcFU/YD5rWEdbOlxiO1ZlWms+XllqM25OaEpcY0VdOD9EcldyO14scjBCWy5WKC1bcVxqWSQ8ZWVvVUgiNEUqMUs+QmtAU00xUDkjOk1yU0JRP0ldXkpZLVwyNmBeJiJMIkJrMGFmZjZmNVtsPiFrVWhfIiJpajQ+VW5oZyQ3NW5qNDlpTilhLm9hTS9CTD4sKzBcbGFJaV5CbiYkLz5vY1EpbixeLEAnLDxCLmFKJEIvOGotdCUyMFpzbjZROjNDXnJRYnEwaikraVwkaShOdUglbVY+QC5AXUtfZVo9YWosUidHJ2taNUs4bkpRUUhwSTZcXFNgWzkmRj5sLENbbG4tazE+dGAlaVdnIyRoVi91MihjckFUY1ktaj5NN01uS0cpUHRrYiwtYGNJXD9raV4hZkdNJ1xXMDJJYV1ncjtVZnMsVCtRVSJYaVImIV9KcD9GaGxjNVMyZUhGNjZHVzErKXBnZEQ/SWQmVHE/OU9fc1Yzc0JaWjQrTnNAKiEnL0VBOkBHWi1ZNF87UDE/Pz1ic3Mpa084O0shaDBSZGxdQD9EJFxDQVNIXCg0PyMiSFdSKztfWzQzcj1bNE04QVl0R2J0Jlc8TCQ+VGtqckMnQ1dyXSI/MGsybXBMbjFBSylaVjxLc2dLOGBpKW5LaWZdO1otTWpAZUpmbXFFRVRrakJwQlpjXSV+PmVuZHN0cmVhbQplbmRvYmoKeHJlZgowIDkKMDAwMDAwMDAwMCA2NTUzNSBmIAowMDAwMDAwMDYxIDAwMDAwIG4gCjAwMDAwMDAxMDIgMDAwMDAgbiAKMDAwMDAwMDIwOSAwMDAwMCBuIAowMDAwMDAwMzIxIDAwMDAwIG4gCjAwMDAwMDA1MjQgMDAwMDAgbiAKMDAwMDAwMDU5MiAwMDAwMCBuIAowMDAwMDAwODkwIDAwMDAwIG4gCjAwMDAwMDA5NDkgMDAwMDAgbiAKdHJhaWxlcgo8PAovSUQgCls8ZmI5MDgxYzU5YjFhNTQ5NzgwYTVjZmNlNGM5ZWNkMDM+PGZiOTA4MWM1OWIxYTU0OTc4MGE1Y2ZjZTRjOWVjZDAzPl0KJSBSZXBvcnRMYWIgZ2VuZXJhdGVkIFBERiBkb2N1bWVudCAtLSBkaWdlc3QgKG9wZW5zb3VyY2UpCgovSW5mbyA2IDAgUgovUm9vdCA1IDAgUgovU2l6ZSA5Cj4+CnN0YXJ0eHJlZgoyNjU1CiUlRU9GCg==</script>
 <script type="text/plain" id="guide-guarantee">JVBERi0xLjQKJZOMi54gUmVwb3J0TGFiIEdlbmVyYXRlZCBQREYgZG9jdW1lbnQgKG9wZW5zb3VyY2UpCjEgMCBvYmoKPDwKL0YxIDIgMCBSIC9GMiAzIDAgUiAvRjMgNCAwIFIKPj4KZW5kb2JqCjIgMCBvYmoKPDwKL0Jhc2VGb250IC9IZWx2ZXRpY2EgL0VuY29kaW5nIC9XaW5BbnNpRW5jb2RpbmcgL05hbWUgL0YxIC9TdWJ0eXBlIC9UeXBlMSAvVHlwZSAvRm9udAo+PgplbmRvYmoKMyAwIG9iago8PAovQmFzZUZvbnQgL0hlbHZldGljYS1Cb2xkIC9FbmNvZGluZyAvV2luQW5zaUVuY29kaW5nIC9OYW1lIC9GMiAvU3VidHlwZSAvVHlwZTEgL1R5cGUgL0ZvbnQKPj4KZW5kb2JqCjQgMCBvYmoKPDwKL0Jhc2VGb250IC9aYXBmRGluZ2JhdHMgL05hbWUgL0YzIC9TdWJ0eXBlIC9UeXBlMSAvVHlwZSAvRm9udAo+PgplbmRvYmoKNSAwIG9iago8PAovQ29udGVudHMgOSAwIFIgL01lZGlhQm94IFsgMCAwIDU5NS4yNzU2IDg0MS44ODk4IF0gL1BhcmVudCA4IDAgUiAvUmVzb3VyY2VzIDw8Ci9Gb250IDEgMCBSIC9Qcm9jU2V0IFsgL1BERiAvVGV4dCAvSW1hZ2VCIC9JbWFnZUMgL0ltYWdlSSBdCj4+IC9Sb3RhdGUgMCAvVHJhbnMgPDwKCj4+IAogIC9UeXBlIC9QYWdlCj4+CmVuZG9iago2IDAgb2JqCjw8Ci9QYWdlTW9kZSAvVXNlTm9uZSAvUGFnZXMgOCAwIFIgL1R5cGUgL0NhdGFsb2cKPj4KZW5kb2JqCjcgMCBvYmoKPDwKL0F1dGhvciAoQ2xpZW50IFRvb2xzKSAvQ3JlYXRpb25EYXRlIChEOjIwMjYwNzI4MTIzNTQzKzAwJzAwJykgL0NyZWF0b3IgKFwodW5zcGVjaWZpZWRcKSkgL0tleXdvcmRzICgpIC9Nb2REYXRlIChEOjIwMjYwNzI4MTIzNTQzKzAwJzAwJykgL1Byb2R1Y2VyIChSZXBvcnRMYWIgUERGIExpYnJhcnkgLSBcKG9wZW5zb3VyY2VcKSkgCiAgL1N1YmplY3QgKFwodW5zcGVjaWZpZWRcKSkgL1RpdGxlIChHdWFyYW50ZWUgR2VuZXJhdG9yIFwyMDQgSG93IFRvKSAvVHJhcHBlZCAvRmFsc2UKPj4KZW5kb2JqCjggMCBvYmoKPDwKL0NvdW50IDEgL0tpZHMgWyA1IDAgUiBdIC9UeXBlIC9QYWdlcwo+PgplbmRvYmoKOSAwIG9iago8PAovRmlsdGVyIFsgL0FTQ0lJODVEZWNvZGUgL0ZsYXRlRGVjb2RlIF0gL0xlbmd0aCAxODQ1Cj4+CnN0cmVhbQpHYXVIS2hjJjhoJjpXZkdmXWc6MkZGbjknXCpwRihLcW0rMkJsVSUoXUVoXmJWTilCOlxbZ0wmSWsvV2FTPEAtZUpONUlnRCNOIzpcKTJZOFY7VTxmZ0AmSk9uNCp0LGNSRFs0bmVvZjlLVExcOnBcRTRTJmFhMk0uMSdKQExFb1YjYy9LLnVpQCs1ajIiYTNZQDZmR2ohMV03bUlLSyouI2UtVV4oIzQiYSg0O2RIW0dbUFEtYDglPmhnYGNsczg7XVEyO0l1Om1hJzU6bklbQ2Y/KFNfb0xBVytgMm9eaDFwdD1VdTVmXiQoMDIiSE1LdVJRXGBIdG5cSDw1S0A9UHBaMGQ1JmZeYnJLJXVMLmVDdDREYG5OODJmK3VgLm8pUXE2MVsiWTg5XWdoLXBDblBgZEZdKGQrYlVISSlTMThrOGFoa0ZyOl42XDUjPU9RITkyOmpYSS44JlRYTW8wOzRUZ0kjOj07NzZYMF51MmVAZUBdTlVJJzh1Olg7J0chISMvXSdDL3UnQ28tcG5FTWolOkRmPVpkKSdGUy9sTVc3QzBuW29wQ2FqbycpWFFFZFlUM1Q2Mi1ybypTUy9hcFBWV2knSlNyLWs7XGtoPUdOMU89X0lHUFZfPCJRVlM6WyIrPE5MOyY+RCElR0djM0F0TCxiY0ZiS1ZoPW9pSkB1YEs7YTkuNkY7R2REaW1OL1tCWz9XTyVBXU0uWGxwQGE6WzwoR15DS0pjPVdEPVJSYFJRIVZqKykiWTBocjpIKypJTlBZSlJcNkhPYT9pbURZVHBRNF0zOVdBV1pXMTBbXDl0RSU3PzBWc1lMRix1K2woNUNBUyE9JDtIJ000Vi0uKGtrdCM1Nk4tbz9uYEBbR0VeI1o3b15EXyJCSm04J1tMPEtldDBMOUwwTjRVR2IiJXAnTEFzTzs+YD5fMUBvYjlCcixPZkZhLDRGSEtyTipMUWJCIT1BMF4jL2VIajhiSWVvQXUiXnEkXzxMUm0xOjJWW2Y9OztjUUFPW1VVZmYlW2A7bltlVz1oUk5WUEQsUWNzK1clMWskRSdWOG9HVC8mUUZbXDxYKUYjckUkXmAkNyozXkNAX25PY2otTGVnaVpjIWUral5NUzZKRSNDNS1tWSUhbGY2UCUjayhqJUx0Y2VaRWIjI0UlZilrI1VvOHVFcFxnZDY8NGpZNnVRZiQ7U1JXbjsmQ2ZITz11MmMtXm0lajdXcitmbHUtNEVcaUkyUVI+aWhnVDshZXBJLSVbXlRHNWI+P3QrP2RWTFVqX00nakE3JmhjLC1BLUoxP1I1cS8qLUZecjA+SThvQFUrY2BvL0o9cCknV2NTXmlLZFxmUikxdW5LMVlDX2pnVTxaS0UkTlwvUD03QC42bys3UURaZ3NCVG0nPGY6ciVrb0xDRURELzhoNzBaJTdhXUVIKyEhSkpMKipkLllfRFxfOzpWcUAnUV87blFIZi9vNXJbYWM6YWdAMmshTywuUT5tXlVcRytlNV4oT1RPLSVWNUZONjpvS1A1WE9HYXQ7S0pARWxaVCxmXl1tKFEiQTE8N2U3Ym8lOkIzRCM6KGNyWTRbK089UDQkNl9JayZUUlczTmNeMU0oT1smSnAjWGw4NzdYXDFmLDA1ZF03LSlyRSxZJ2plaTBVNlRbSjsra19yPmZzKG8tYEhVR21oNVszP19pOSJMQ2IhNmtIT2UvK01aSyRDQT5fSzBcay0kViNzNTZAZ1xVRjRpOyxTI1Y6dU9HWk0kIz4hWFRCI11AMVpFU18qX1EtREo1PlgxPVIuW1pIRldyUVMyWy5YaUNwOG8zSWZZK2VDNkJoT2lKOF01WUdONC0xLThgaV1iayRCcmguOGcvWV1nQEhwZTohPSItV19WQ0U2MG8nOnNGQUFoMWsyUD4uQ09lXHREP0phRWA9QjAucGdcaUJEMylGO2BlYVJnRCdDN3QyNDVLOT42YFxqcmNDKHBlLGg7RF0ibGBQRWVULFg0RWgkXmw0bmY6ZSVQXi1JUFRXQkNsMV90V0NrY05RSkpuWTxpTUFALT1RV1BZUF8hW1QjVTcpZjkhPzgvQlssVWBlV2dVS01wKG8wVktlUz9EbGAwU1UmK0ljZVtcSGlSbidvQUs/QFxxRV9MWGY0QVFBOmstU3BNcioxKSZfciMvazQ8PiYpXlkjaTFqPUZxc0VIRy9fO0xrJFQ6cFxvdUU4PGtTKlAnNjUrUlxcU3VSWjwvMjttUkFaW0ZmSEA0SVUvI2tZcT9aRHNPZWlSUS1iQUEidF0oWkdJXipxIVJbKktVXSchcVVUdW1SSnAtI203NWlDcXM+a0InPmEsQC9bXWo4ZE9iKWllJ1VbN0FpZmhBLF9qUXIuaklkKiZJWiJsZUI7KSZDbk9hM0ZjaCstRD5zZiNgbUlbLVFPTFg0TjFhLihxR2c+TGtUQERPSSY2fj5lbmRzdHJlYW0KZW5kb2JqCnhyZWYKMCAxMAowMDAwMDAwMDAwIDY1NTM1IGYgCjAwMDAwMDAwNjEgMDAwMDAgbiAKMDAwMDAwMDExMiAwMDAwMCBuIAowMDAwMDAwMjE5IDAwMDAwIG4gCjAwMDAwMDAzMzEgMDAwMDAgbiAKMDAwMDAwMDQxNCAwMDAwMCBuIAowMDAwMDAwNjE3IDAwMDAwIG4gCjAwMDAwMDA2ODUgMDAwMDAgbiAKMDAwMDAwMDk4MiAwMDAwMCBuIAowMDAwMDAxMDQxIDAwMDAwIG4gCnRyYWlsZXIKPDwKL0lEIApbPDRkZTYyYmI1YmY5NWE2ZDQyMzJkNDdhYzE3NzQ2YWQyPjw0ZGU2MmJiNWJmOTVhNmQ0MjMyZDQ3YWMxNzc0NmFkMj5dCiUgUmVwb3J0TGFiIGdlbmVyYXRlZCBQREYgZG9jdW1lbnQgLS0gZGlnZXN0IChvcGVuc291cmNlKQoKL0luZm8gNyAwIFIKL1Jvb3QgNiAwIFIKL1NpemUgMTAKPj4Kc3RhcnR4cmVmCjI5NzcKJSVFT0YK</script>
-<script type="text/plain" id="guide-ebay">JVBERi0xLjQKJZOMi54gUmVwb3J0TGFiIEdlbmVyYXRlZCBQREYgZG9jdW1lbnQgKG9wZW5zb3VyY2UpCjEgMCBvYmoKPDwKL0YxIDIgMCBSIC9GMiAzIDAgUiAvRjMgNCAwIFIgL0Y0IDUgMCBSCj4+CmVuZG9iagoyIDAgb2JqCjw8Ci9CYXNlRm9udCAvSGVsdmV0aWNhIC9FbmNvZGluZyAvV2luQW5zaUVuY29kaW5nIC9OYW1lIC9GMSAvU3VidHlwZSAvVHlwZTEgL1R5cGUgL0ZvbnQKPj4KZW5kb2JqCjMgMCBvYmoKPDwKL0Jhc2VGb250IC9IZWx2ZXRpY2EtQm9sZCAvRW5jb2RpbmcgL1dpbkFuc2lFbmNvZGluZyAvTmFtZSAvRjIgL1N1YnR5cGUgL1R5cGUxIC9UeXBlIC9Gb250Cj4+CmVuZG9iago0IDAgb2JqCjw8Ci9CYXNlRm9udCAvWmFwZkRpbmdiYXRzIC9OYW1lIC9GMyAvU3VidHlwZSAvVHlwZTEgL1R5cGUgL0ZvbnQKPj4KZW5kb2JqCjUgMCBvYmoKPDwKL0Jhc2VGb250IC9TeW1ib2wgL05hbWUgL0Y0IC9TdWJ0eXBlIC9UeXBlMSAvVHlwZSAvRm9udAo+PgplbmRvYmoKNiAwIG9iago8PAovQ29udGVudHMgMTAgMCBSIC9NZWRpYUJveCBbIDAgMCA1OTUuMjc1NiA4NDEuODg5OCBdIC9QYXJlbnQgOSAwIFIgL1Jlc291cmNlcyA8PAovRm9udCAxIDAgUiAvUHJvY1NldCBbIC9QREYgL1RleHQgL0ltYWdlQiAvSW1hZ2VDIC9JbWFnZUkgXQo+PiAvUm90YXRlIDAgL1RyYW5zIDw8Cgo+PiAKICAvVHlwZSAvUGFnZQo+PgplbmRvYmoKNyAwIG9iago8PAovUGFnZU1vZGUgL1VzZU5vbmUgL1BhZ2VzIDkgMCBSIC9UeXBlIC9DYXRhbG9nCj4+CmVuZG9iago4IDAgb2JqCjw8Ci9BdXRob3IgKENsaWVudCBUb29scykgL0NyZWF0aW9uRGF0ZSAoRDoyMDI2MDcyODEyMzU0MyswMCcwMCcpIC9DcmVhdG9yIChcKHVuc3BlY2lmaWVkXCkpIC9LZXl3b3JkcyAoKSAvTW9kRGF0ZSAoRDoyMDI2MDcyODEyMzU0MyswMCcwMCcpIC9Qcm9kdWNlciAoUmVwb3J0TGFiIFBERiBMaWJyYXJ5IC0gXChvcGVuc291cmNlXCkpIAogIC9TdWJqZWN0IChcKHVuc3BlY2lmaWVkXCkpIC9UaXRsZSAoZUJheSBSZWNvbmNpbGlhdGlvbiBcMjA0IEhvdyBUbykgL1RyYXBwZWQgL0ZhbHNlCj4+CmVuZG9iago5IDAgb2JqCjw8Ci9Db3VudCAxIC9LaWRzIFsgNiAwIFIgXSAvVHlwZSAvUGFnZXMKPj4KZW5kb2JqCjEwIDAgb2JqCjw8Ci9GaWx0ZXIgWyAvQVNDSUk4NURlY29kZSAvRmxhdGVEZWNvZGUgXSAvTGVuZ3RoIDE3OTUKPj4Kc3RyZWFtCkdhdG07YkJEVnUmRGQ0NmslKWpmV1BdOXBaWCNHM1JRO2dvRyY2PDokWi4iIVApdGIuIitrXmdwRG5icDslWmVXWTNrOCk4NzJZM3BXZVxJTlNoXFA6KClTMiQsJDgkIS0nLGEhcUBmUE9xNyU/M1chdGhcczVRbFxVaWQrKGtgWl1LLEQpVj5LY2A4YVJSKDo+aUxKamkwbCc1NkJKNigxZUBtKUJYXjU7JU03Qj5FNCNTc2BKOk0nSWpePV8/W29TPFxWJ2VZXSlJWDFpU0NFNGJJOSxJcSNcWjJJPmo2XjRgTTEmTi9wPGwzM3InJixrKyxeMy1aLkw1RGlyJ2xhMC9qRHMuQ0M9WHFSWWtGPSJTYjJgSmxkIyYpLmAsYWM6Zj1YPFJiM2NnSWRbMkd1by07SFEmSScxcFwzIihfTHJkWzpFJV9qYDU2Tk9YRyU0ZGIjSVNGRW0xa2FaVUFtYHIiKjtTW09fInQ5MTpoYTtLPVEiazJrajBiOS1saiopPyoxSGkjYTlMWVluJzxDKyd0Qz05YzkjRzUqY0xsOFEoS2UiInJPOUpeIzMkX0ZZRkkkJSRlRTxXMThxST5yUFVUMElAUmF1LmpfPVFHQyQ/ImNqX3JaNWZnPi1UYy8qUVY+UnBFVztdTCVVJy9JIiM6aihJWyhvXyx0R2dWcEVSNiUmJzdtKFczI1pnNiVpR1JnXk8yP2xBKlkxN2cwR11xOE5XWHVtNGReI2FMKDA5N25nNyJOdGMtLlw/OGw2RXUqQUo6N1luT3BpT0Y5NW4sanMkIk5oSj1ObylpMTBOVzRVckw9U3NpQjwvSXBwXlUjZDBhWi9ZVjVXbTtHcyZxTkEkUV9GNFluUVtGLlJpT18iYFosPXNJJ2BUR0BALC0zLHNnN0JRQWRZSSUwJF5kcTc4U286OilFaiJdZEZAK3VkbD5ybWxYY05WKmwlOCRsPWdCPXBcOEc6dW4/PE8lZW9KYXBqIjEiZ3I9Z2ZuN3AkXEFHbSRkNCRtL0NqKWFTKDA7NF5RUyhvKEtgTzwsUWZrITBUS2FgYy8hMHFoWzhrS3F0WEk9QXU+IiMiazMtWW1hdVpBU2FaQG1TO0E1Z3JbaFYxU01abVdlMHQiWUJKTE9YR2c7bWZjSmZdUVhlWk9kZWlASic3Nz9IZTheVlM8b1UiTkk1R3BSQyhiQk1UWl9LXVdNakEjSGxWa0QjRl1qaSpySkAuQjNrcGZUSCZmKVtHQjBKTW9daEcpQF9HRmlQS0BkSmhfU2Q6YV1rKSY8ZjUqbmghX0VpbHQ4ZFhYRk5wSW9aXllgYURuQz8iTF1jKEhoYDVWckJvYyZDRj82OEtEXzE/JkpeZG1iLkZbWm1naW5gYSwlNUpmNCNyKltrIV5AUmFeWWBeMkc7SigwYGRwMnJxZUs5RFdvQktMTURETGRbXmcmUkNFPU5lXiw4ZDVOM3MvYSE/cVZaKmZQWkoxb2s5Q10kb143YjZQbzg/akI9NTc1T0g/Uj9aOlw0WigmZXBnM1RjMVwxbGBsZCxoRTYjViU0PVdOMkpiOzkxMT4/ZzRRcUZdL3VSUl86NEMoRG5qZ25OQm8uU09wY0pDcmdfPTEpWidxb1I8OWFGZmovLy1fLXQxWURjSm09TFJEPilgLCIiUmtAUFkuYiopWiNzKjJMNElwQDtbMiFkdDE7OzdRNVMiNltWT0BrIVJjT2pvcXNiP2xOU3VWSzdwXllZRGBlbEUzTVQrcD8wSGZiJUBFJEw2PG0tYSRJX0NOMnBNRD1qRHRhKDlVJjZGLVQnUVg3TVRCNyNgL2okNDhsVUpTcSpCcCYlQzg8biRNT2hoXUVAU1ludS4pPUUtOWRgJzAyQVhwLm0lM0FEXWlnP2shbiQ6IUdUUVMzUSVEbS1HZSNDIjBeQFJlPWJGOT0+NSZbKUFJVC1sMylTYGY9LCNZLSdZRnQ+I1ZZTCVmam43cGFca2lFXWNVW2FZJnJtLipmQEo5Y1U/PClkKF9jbCE2MVknTF8rckE8RjJRWzZKWEAxclVsR1NHZVdKIS1AME1TRC4vUUpdXUFFJGo4Mj9YcDJwS1grODlDI28oajpAUy9cWkBtOHFXIVRcSF1MQnVjRSU5cHAxKD4kRFckSmojXFFtcUJOaCpqZHFENj5aKSZYXiNMNmBmbUBXaTJbXllRbC8sJTU4NDxQcCQ0V3BRWl1rO1VwK28yKXBJLyNsaTIpcjJuKG4nOUA6KlVqWU8zUGJFYSE1UzM3c1xNOVNRTzUqSlgwNG5aWD0mXk0lZGNCLmhhMHBqTikmUUZVP05VaF9ldSkvSycyZV1aZTtdJURQLnAkV2NsQ0ZFNzBSLTpeKWRGS11TdWZ0WlMjP10ifj5lbmRzdHJlYW0KZW5kb2JqCnhyZWYKMCAxMQowMDAwMDAwMDAwIDY1NTM1IGYgCjAwMDAwMDAwNjEgMDAwMDAgbiAKMDAwMDAwMDEyMiAwMDAwMCBuIAowMDAwMDAwMjI5IDAwMDAwIG4gCjAwMDAwMDAzNDEgMDAwMDAgbiAKMDAwMDAwMDQyNCAwMDAwMCBuIAowMDAwMDAwNTAxIDAwMDAwIG4gCjAwMDAwMDA3MDUgMDAwMDAgbiAKMDAwMDAwMDc3MyAwMDAwMCBuIAowMDAwMDAxMDcwIDAwMDAwIG4gCjAwMDAwMDExMjkgMDAwMDAgbiAKdHJhaWxlcgo8PAovSUQgCls8NzZlMTQ4OGE1Y2Q0MzZmMDExZWZlNTMwNDZjNWQyMjg+PDc2ZTE0ODhhNWNkNDM2ZjAxMWVmZTUzMDQ2YzVkMjI4Pl0KJSBSZXBvcnRMYWIgZ2VuZXJhdGVkIFBERiBkb2N1bWVudCAtLSBkaWdlc3QgKG9wZW5zb3VyY2UpCgovSW5mbyA4IDAgUgovUm9vdCA3IDAgUgovU2l6ZSAxMQo+PgpzdGFydHhyZWYKMzAxNgolJUVPRgo=</script>
+<script type="text/plain" id="guide-ebay">JVBERi0xLjQKJZOMi54gUmVwb3J0TGFiIEdlbmVyYXRlZCBQREYgZG9jdW1lbnQgKG9wZW5zb3VyY2UpCjEgMCBvYmoKPDwKL0YxIDIgMCBSIC9GMiAzIDAgUgo+PgplbmRvYmoKMiAwIG9iago8PAovQmFzZUZvbnQgL0hlbHZldGljYSAvRW5jb2RpbmcgL1dpbkFuc2lFbmNvZGluZyAvTmFtZSAvRjEgL1N1YnR5cGUgL1R5cGUxIC9UeXBlIC9Gb250Cj4+CmVuZG9iagozIDAgb2JqCjw8Ci9CYXNlRm9udCAvSGVsdmV0aWNhLUJvbGQgL0VuY29kaW5nIC9XaW5BbnNpRW5jb2RpbmcgL05hbWUgL0YyIC9TdWJ0eXBlIC9UeXBlMSAvVHlwZSAvRm9udAo+PgplbmRvYmoKNCAwIG9iago8PAovQ29udGVudHMgOCAwIFIgL01lZGlhQm94IFsgMCAwIDU5NS4yNzU2IDg0MS44ODk4IF0gL1BhcmVudCA3IDAgUiAvUmVzb3VyY2VzIDw8Ci9Gb250IDEgMCBSIC9Qcm9jU2V0IFsgL1BERiAvVGV4dCAvSW1hZ2VCIC9JbWFnZUMgL0ltYWdlSSBdCj4+IC9Sb3RhdGUgMCAvVHJhbnMgPDwKCj4+IAogIC9UeXBlIC9QYWdlCj4+CmVuZG9iago1IDAgb2JqCjw8Ci9QYWdlTW9kZSAvVXNlTm9uZSAvUGFnZXMgNyAwIFIgL1R5cGUgL0NhdGFsb2cKPj4KZW5kb2JqCjYgMCBvYmoKPDwKL0F1dGhvciAoQ2xpZW50IFRvb2xzKSAvQ3JlYXRpb25EYXRlIChEOjIwMjYxMDAyMTM0NTUzKzAxJzAwJykgL0NyZWF0b3IgKFwodW5zcGVjaWZpZWRcKSkgL0tleXdvcmRzICgpIC9Nb2REYXRlIChEOjIwMjYxMDAyMTM0NTUzKzAxJzAwJykgL1Byb2R1Y2VyIChSZXBvcnRMYWIgUERGIExpYnJhcnkgLSBcKG9wZW5zb3VyY2VcKSkgCiAgL1N1YmplY3QgKFwodW5zcGVjaWZpZWRcKSkgL1RpdGxlIChlQmF5IFJlY29uY2lsaWF0aW9uIFwyMDQgSG93IFRvKSAvVHJhcHBlZCAvRmFsc2UKPj4KZW5kb2JqCjcgMCBvYmoKPDwKL0NvdW50IDEgL0tpZHMgWyA0IDAgUiBdIC9UeXBlIC9QYWdlcwo+PgplbmRvYmoKOCAwIG9iago8PAovRmlsdGVyIFsgL0FTQ0lJODVEZWNvZGUgL0ZsYXRlRGVjb2RlIF0gL0xlbmd0aCAzMTI2Cj4+CnN0cmVhbQpHYXUwRmhmRzhYJnE5Ul4wcFJNRUhWWWY4ISgkPC1aKDQkcmpsM0FEWGhDZGBiNlVRTUNXKkZjPU9xdE9oKiQ5IitCZFJiLmNpVyY2VmdNWHEiajxKPU5sRl8oQiM4Vik+Y08tKzIxayRaSXM/OS9CO19eb0lJUEU/TW5xUzxAXjVlbixiXFVmWWh0Q2dONGUzKl11PjNlK0otWSk6JDBFYFlMQU1YclRKO2JFaiJmZHFaPXIlQDlmQFlfZ1ZQciRVaT9pPyI/Oz9naG1JOiJmMTxycChldWclTCp0bGklRmlhRjxzYG1jTzUjOiZlYlFUMjpnMWk2UktHOjleWFZEN051ZyUqTFRNIU43bUw5TWhnZ05gLkg8ZHRxcSZGOmsvQFE5QyUjVkk/IjVdU0wtRk0/NypXIUsxZ1FrTFk/MEgyLUpGLG1lQUxHXytpTkpJYGg4cDM5LUAoUUAsM1pOSllgNDpsLTBeP0hWImhxNHBxJThKYzJLPWM2SEJwa2xWbldfRjgxVlQsY187X2hgWEI1ZiYrLUIyQ2ROWGErQF05cCRMX3I3cy8jKkBjKEVYTi1NQzdtVTo3bCk7TUBrNEpqcyNaalFIQjdtSnRVaDhnODU1WVgoUmNoYy9VJmUwcSJlbTE8WWhfalIkJSVBZ0w+WyUzJHFCMV1mZ10hQT8ka1ljXylaZFxuQl9ScEVpQlU6bStUUz5VKkZFbEFnKT5ncGhraG5GTUoralZDbkZbJXBxQi9rbUU5bVduY1dmOU9yWyFSJyFVJFtlI1xSN0ZgMj1XQCtJPSg+U1NQc2teZlpDZTUlVmZbMEw2SUhPQDVjJTlENnRcOCwiSER0TlI1U0NZZmhDXEg+bDR1WnBDYDhRc0cxKGdHTHJ0T1VHKUc3PnBeSm83MDkoaSxNWkw/MURRKV10K286SzphIkZPIiFMKT5eakhgO0xNS0NGRDd1WmFxREBMMTdmb0lcMU5ydVE6LGl1NEdcWSwmOkgsVjwoQS0yNjdXa01XWSMpYVFiYz1cJGBOZFpJXjM+VFA4LjNtPHIzXm5IKSU5VEVnYCYoXm1JZ0guNjxlSyR1dUcqaVowVixbMWg8P0g0WkxnTWcjQjs+O1llZStTQEcxK0xRR04hbG9sNmtbPldATVQtVD1FN15HJi9aYyEpaC9yaz83JHRwTzt1YkJRJCwnS0tnU2wyLVtrVDpuWk9LQUxXbCkwJS9PM0I7KzA6QEYuS0MmRDVYZFBGPDZoOWgwRkFJVyhca1hwJVRsOFJfXExMYTZCUi5ZIz9fZiZhLmdQQVw7I0tmQkdtRVIvYCsib2xHckpscEwyW11OUm9vYSNgTCJEQit1UHNuM105cG1WWUxyN2tFWVVtMW5vMHBOWm01OzQycnUuc0Y6YGM/XTk5R19xM0wvNWxcPikkJmdjV1orNl5HWmoxZ1cpIkRqWWc7NUBrNi5FOV1tP15bVD1kKWxFdFdeXSNpMy80NW5EczgoN1FLNVtCNiU9V1RaQ2NAJVgvITlZVy9bRU9vXUg9PUxLSCJ1PCksbCg+Pkc7UGBMQl81Mk0zRjRyLSpfLVVET1MoVTFjPyc4Qm5LXkFQQnAtTWkhZWtYbmk8P0IoXjY2WT4+UVEnY08yIXRhQCRQYzFRPEs+KF9EJlY3S2lsUVUzU2NaK1BsLE8uSkZkJnNLPkVQMTcmQ2w/VWJNSlJnWT51RWRTZDlzQzxyckA+QmJjTU5HPjZAakwxLjs+YUk8KmY4PWNOR0c8LUAsYU43Z0luW08wODxPJUIwXXA+WU0lWmk5ZHI8dWdOcHBCIiJCZF9DRVdObWhLOCM1PFora0p1aTZfNVJYVCxIOE5OaGlqREQwTUk5bHBENyZGMCc7Tl81bEdZPz9JVy5uYGBtJ11dTWRmLDYtJkRdSyIsZGFHXkQ0LkFSYTNNQ0xaayFrIjImSmphSjEtV1V0S24hQVs3aSRlXjkkNDFKXywzVCxQIjlFbFE6cDhUPCk7R1w5RjJFOXUqNUxdRj9lKyEtN1VmLW8lInIwYDJGaVUkXURyLWhkU1NqJjJTZVluLm9oRVwhRWliKVNjV3VfJDpAZklcTDwhNCFrMyIrYE5eUCpYTCQ5aWFVLD07R2pBK2o0MFRIISpSIiNkTSspQUU3PU10NTNNSmVsYk41Yl1dZzdoJyVBXC06VUE3OVwqajRWOlw1NEFQSSswZEIjSSRuPyktQmtFWUtvPEEnNioodFJcUXBnJXVXOj1ZP1MxTihfQnFPMj8sJzFPM2JcTHIiRWlBUjk1ZD9KYVlJPTBHNFwyMk89RG80YDNVcjBDZTQ8VFdWRFlWJ2I9Om9qUFBecFNjZ3MjXyNuJiIqMk1US1pHamoxZ0EjTiZbJyVuUm9qb1BOUDA0JXAxWlQ6X1BybHNmODZpcVFzXyVfY0dRUjVRLC80Ni4xblxvJ2goRkEhRWRZS1YjX3IlNk9NLUMoZExTc01EaWhUZjhrZ0glXnRNc2RxWy0nU2FoWykpJVRLMkUyb2JUKy5ZNjZJNSMnQE5hX3BYXzE0RE9jVSc8XChfJ1RFSWZkTmw/T3VWR3AwYnIpSExkUUxmLEA+VT5kJVpaLyskQk8tPnAiMSlcPTFRRVJaaDtYbmc5MzRKczVGbTNYaG4pYFVlYi4uZVdna00qMC9OajlgRUJJWkJOVSIsbTtKJC01VFg5QTwuTVw2a181IV8oIy4vUSNiPCZFWk5lYFx0YEpucl9MTzBpakZOTjZoOTtnIzQ2Y0MxPXFPKDVKPVJvT21IXTBVTidmO2xhbzhVMUc3SzYsODI6Ny0lckxJWTRvKmtBdWVTJGd0RicxMi82Qj0pIidoNUMtPmpcKFZ0TGZQZkBDJlNYLVBpci5rNnFvaVc/VUc8aDkraTAtTlxMLDBgbUJzYlllKV9jOGVqU1o+Iy9HX0RFNjM2UChaYjEvOTI4KSlSdElZcjBnJGphKCtRLGM4MFEnQD5xRiMpPmlFRjJaYzYjWTxBOU5BN0hWPzYzTDVeV1EyViZMLU45ZyZIbGMuSi5gZVRHXCs+PFVfZXBEYyU/UjBIOlU8NSFdQHMwWHA8PDpFX0s8ZU40cEZuNyMkdGFlPklpNVdqUk1pXmsrJ0VTckImIi9FXG1yZERAQWVwUVRIY0c+dTdwQCZSP1U1alJkMypCOklyVSlyZ09PPCFALEFdc2hHZ2tmLElkLj9DZ0daPj5OUy4yTVljMS9wNnMqcj06YXJLTEdjPzJISSVaS2RZRVZbcnU4XlNydEV0Ok1oPSZwNCcuKTVtI2ItZiNRKCwpKEgnbmdvS1UiZDd1UDomPUFoOkIqbWQsKjAxMFgnZjEtdXFAXj43b2hWI1hPYWJOIzMoRyo4QyElUTgsbmJFYTZOPE9lQUAmO3JEdTkyaHAzYkArc2coXU8lbTtdXm9oaVIsNy9UT0RddUs6KyVhYl5yUCdgRzRBT3FZJy1VN2o2U0pHSm8rYm5oSVx1STQ8NWYoZ0w5OGFATltSYCdgXGkhaF9sbHBxQGtBN0NHTVQ8XDFbPlApXz1xJy9TS1ZAPzRFMW0mL2ZMT009ZDt1PF0pT0EyYz5EO05aYEVNY2loJzQsKF87JWM5KVtyVGkrMCJMKWFPJm5YT1BgYlBcb2skS19FTWo4XWsxWScwcEQqX3AvdVJjQTFZRmhTbi1kRDMkR3JdTzJnMCxRU3RSSFVbU3BdPjZIO1gzM0MrWi10VUUlKmFmZVJDczxRSUFFJzhMOVZKL1ZbTV4yMmFGcTgocDlsYGQkRVhLNCs2UDYqYzdyRmY6LDI4dEp1cSY6YktZak8yTDEuQSo5cTxMPV4scC1bJShILlgzVGttLGolQmc/QTZVbWZcIW9iOWclL3Q5LHUyNyopTkBKZnMwNUNadVY1MkBQQV9mbVFxJUghU0BETGUoc0AicUFgIWE8KFdxP3NyTTUmXk8uSXI0VSpEKFFZP0ZxRSQlbklEYDQvODRjWFVjQDIjKyRTSzdEVSo3OV05PkpPXkNfJVJGTmRHTidtWGspbWlwRUNtZzwoWiwtLlpTRzNGYytAYj1aJiJOJSRwK2VTIksvaixIIT1zNzVNJlo2M3JRQEFuUj5qR1BiMiE9QiZwT29SayVYV25cPzJQNCZGNSJffj5lbmRzdHJlYW0KZW5kb2JqCnhyZWYKMCA5CjAwMDAwMDAwMDAgNjU1MzUgZiAKMDAwMDAwMDA2MSAwMDAwMCBuIAowMDAwMDAwMTAyIDAwMDAwIG4gCjAwMDAwMDAyMDkgMDAwMDAgbiAKMDAwMDAwMDMyMSAwMDAwMCBuIAowMDAwMDAwNTI0IDAwMDAwIG4gCjAwMDAwMDA1OTIgMDAwMDAgbiAKMDAwMDAwMDg4OSAwMDAwMCBuIAowMDAwMDAwOTQ4IDAwMDAwIG4gCnRyYWlsZXIKPDwKL0lEIApbPGM2OTU2ZTg2ZTNmZGI0MDE2MjYyNGIyMDQzNWMyMGM3PjxjNjk1NmU4NmUzZmRiNDAxNjI2MjRiMjA0MzVjMjBjNz5dCiUgUmVwb3J0TGFiIGdlbmVyYXRlZCBQREYgZG9jdW1lbnQgLS0gZGlnZXN0IChvcGVuc291cmNlKQoKL0luZm8gNiAwIFIKL1Jvb3QgNSAwIFIKL1NpemUgOQo+PgpzdGFydHhyZWYKNDE2NQolJUVPRgo=</script>
 <script type="text/plain" id="guide-clientlist">JVBERi0xLjQKJZOMi54gUmVwb3J0TGFiIEdlbmVyYXRlZCBQREYgZG9jdW1lbnQgKG9wZW5zb3VyY2UpCjEgMCBvYmoKPDwKL0YxIDIgMCBSIC9GMiAzIDAgUiAvRjMgNCAwIFIgL0Y0IDUgMCBSCj4+CmVuZG9iagoyIDAgb2JqCjw8Ci9CYXNlRm9udCAvSGVsdmV0aWNhIC9FbmNvZGluZyAvV2luQW5zaUVuY29kaW5nIC9OYW1lIC9GMSAvU3VidHlwZSAvVHlwZTEgL1R5cGUgL0ZvbnQKPj4KZW5kb2JqCjMgMCBvYmoKPDwKL0Jhc2VGb250IC9IZWx2ZXRpY2EtQm9sZCAvRW5jb2RpbmcgL1dpbkFuc2lFbmNvZGluZyAvTmFtZSAvRjIgL1N1YnR5cGUgL1R5cGUxIC9UeXBlIC9Gb250Cj4+CmVuZG9iago0IDAgb2JqCjw8Ci9CYXNlRm9udCAvU3ltYm9sIC9OYW1lIC9GMyAvU3VidHlwZSAvVHlwZTEgL1R5cGUgL0ZvbnQKPj4KZW5kb2JqCjUgMCBvYmoKPDwKL0Jhc2VGb250IC9aYXBmRGluZ2JhdHMgL05hbWUgL0Y0IC9TdWJ0eXBlIC9UeXBlMSAvVHlwZSAvRm9udAo+PgplbmRvYmoKNiAwIG9iago8PAovQ29udGVudHMgMTAgMCBSIC9NZWRpYUJveCBbIDAgMCA1OTUuMjc1NiA4NDEuODg5OCBdIC9QYXJlbnQgOSAwIFIgL1Jlc291cmNlcyA8PAovRm9udCAxIDAgUiAvUHJvY1NldCBbIC9QREYgL1RleHQgL0ltYWdlQiAvSW1hZ2VDIC9JbWFnZUkgXQo+PiAvUm90YXRlIDAgL1RyYW5zIDw8Cgo+PiAKICAvVHlwZSAvUGFnZQo+PgplbmRvYmoKNyAwIG9iago8PAovUGFnZU1vZGUgL1VzZU5vbmUgL1BhZ2VzIDkgMCBSIC9UeXBlIC9DYXRhbG9nCj4+CmVuZG9iago4IDAgb2JqCjw8Ci9BdXRob3IgKENsaWVudCBUb29scykgL0NyZWF0aW9uRGF0ZSAoRDoyMDI2MDcyODEyMzU0MyswMCcwMCcpIC9DcmVhdG9yIChcKHVuc3BlY2lmaWVkXCkpIC9LZXl3b3JkcyAoKSAvTW9kRGF0ZSAoRDoyMDI2MDcyODEyMzU0MyswMCcwMCcpIC9Qcm9kdWNlciAoUmVwb3J0TGFiIFBERiBMaWJyYXJ5IC0gXChvcGVuc291cmNlXCkpIAogIC9TdWJqZWN0IChcKHVuc3BlY2lmaWVkXCkpIC9UaXRsZSAoQ2xpZW50IExpc3QgQnVpbGRlciBcMjA0IEhvdyBUbykgL1RyYXBwZWQgL0ZhbHNlCj4+CmVuZG9iago5IDAgb2JqCjw8Ci9Db3VudCAxIC9LaWRzIFsgNiAwIFIgXSAvVHlwZSAvUGFnZXMKPj4KZW5kb2JqCjEwIDAgb2JqCjw8Ci9GaWx0ZXIgWyAvQVNDSUk4NURlY29kZSAvRmxhdGVEZWNvZGUgXSAvTGVuZ3RoIDE2MzQKPj4Kc3RyZWFtCkdhdG07OTJqazEmQUlgZF0ma1xXVkxsJk1wPi1QaD1KZExmL0RjZ1lFLGNqRCZgWnRaW00vNiNbakJeYUs5SGMyTChqYnA7S3FIbWE0RiYlX0BQMUhkaSNxaSUtUTRWVyImODZXKFVCT24pLFpaR3JfU2s6LVUiYURxYml1IU1QVnRpQSJSYFE1PjphJGNJMWQnMChNaDZKaTg8Oi80VjI/IylhOjFYb2U3W0JwLUJhbVdObGgtU3BYJjNpOzQ0aTNEQmtQZmAkTTJ1V0lmQnAmSjArXj84cilLMFQiJFxrQEVHNClAQy40aE1WR1EuWi86WGlQPGIlI2gwNUsxOkE9VmEtaCFxK2xNaSktbC00ZkZPIXRxYS87ZSFXV3BPKGorYitDVT9cSj9uJWYqZEd1K1VmLHNuQDIhJis0P0pRRCowRTBXSSVISz1nKSskZVhRKmtxRD8hOy1rUC1SK3F1QE9kKmlkXStHJSlhSCdvJ3NlZCkqa1o0WSVGISdcOzFQbyFBajFcZilgT11XQlwpSFxgdU1nIUo5QmR0VFtGIl4nK21aU09TMl9hcC1BZFFmWzBVUl87amtfOy5BNUxCaVJNPk9hajxIY2NaR01EODkvMic+LkgjK2siZ0hVaE9DXl1mLDQ8KSUpTmNAVy9UWWlGJz5HI1w5OnNyM3FcXVUwQ0c+KSUvTmslKUpfU2BHWjtdSVxlczZLMk5oa0U3P2BJSmo5JkZbNTFLT0RYUU5DI1tiNiMkT2tMXCM2WlZTJG1mNHVEO0UrUylub2dpNzs1WSokJD1uMkBcYElPRkNfPC1TSjhkO2QjNkxZXF8yQVdxLTxtOkA9JVAqTlI+alhuZ1thYVpdWzFUaExKOFw/MFRxJkN0TiZBS0kuLmtBKDkmOzFMSnRbRUgjY1NobClrLUhJRlYjPz8ndD4lalI2WT1UM2VhbCZHbFxUIz1INGIsIys4Ik9RbyhlKFAsMmB1M1hpODA+L3UwRzM8NCYnYy0oITglQFYsOSlRaEE1UiRWKD04WD9KNFJgWnNObUllYUdWRC02W1VgTFxKU1JDaE5XUFRaITFvNnN0al0nI1A9ZzdoMjZzLU0zWnBcaTY4aDtiMydTKDBiaU9CLj5EcT5Xb2YvWjxGZjc6XEBxMmdrN0ZOPXEiYGNyLUZARXFiN2pzYzZnOjw0XVEwXVVUXT9vbkt1QWg5KFZZOVZeby8vWDdcOF0kRT1SPSdlSUk8cFIoalc4SFNeUiREKV9kNWskOTdRPlpqRyliaShSLFtxbVFhPFVgKSlbcztzJ2E/TUJzTjpTTCFaU2FMLicvT2BxKSpRQm1SSm9iX0oiQTQ7Y0teX01GT1hKcEhMTy9cO0JaciZRZ0p0c2E3XVVCOnQ3JkZPKnJxWyo5RCEpJ0hwa00rSkMiWExTQiw3YGw1Qj0iMD5sSk5jJHJkVDhjUDxhdS5dYG1dWEAuMVwpKFthT1dvUkssJSNJX1lTUjkhSV85RycyKVRqai5ZWjtIMTVyXE42TT9fYWNhZCJjN1g3RkpCLComUT9DUztBSEZFT2Q4Qys2K1Q0NGE2bWd0Rl9HMzk0MmI0YW1HLCY2dDktVUEsRk4hVSNRTlYndVZcJFlsXFZYbXFuPiFDYj43PltWMCcxIVFSTDpVZ05eSVhjIm83TjpAQT4uPGc/WCVlTnVfWWxCU1c6I29xJW0rbCdpTkYwbCNYSmhMZSI8OGsiMzEhLmxeIUlRTkFkIUVldGJfLFBnYWMuWTlza0cpRiQnUiY0JnAvNGs2SD9SdVprdVokbE5WWnNSOStEXjIzaC5oRk8pKUwiJkc6R2BAQihOP1cuYEE8ZE42YChnTmRmUkhDaHQwREdvL0U0TGQ+KShGPz5fZXFjJ0xHMklZLDhZQ2wiOmtCTUhtO0Q0OFlmV2c4IkdqNnVSRyNuXWBeIVlYJy87JkZzRydyYiZkIjxQaV0yO1lZS2lmUCs4ZXJzIydJZiRPXGciNHMqKCVZcDJdSyJsQUdcUGBdTHEmcSFuWEBqQ3MqWydmZyxWXlZtW2VnVjsuO0s7KVg4R2JFUihzWTIsU1tDVWFBYEE3PyZiNzNxKChjMUglV0EkXXVTQz0xaU5dQjxNKz8xIVhZPysjL1F0ZFBNQGZTQ2AjPmFZWiFRI1BMMUo5RX4+ZW5kc3RyZWFtCmVuZG9iagp4cmVmCjAgMTEKMDAwMDAwMDAwMCA2NTUzNSBmIAowMDAwMDAwMDYxIDAwMDAwIG4gCjAwMDAwMDAxMjIgMDAwMDAgbiAKMDAwMDAwMDIyOSAwMDAwMCBuIAowMDAwMDAwMzQxIDAwMDAwIG4gCjAwMDAwMDA0MTggMDAwMDAgbiAKMDAwMDAwMDUwMSAwMDAwMCBuIAowMDAwMDAwNzA1IDAwMDAwIG4gCjAwMDAwMDA3NzMgMDAwMDAgbiAKMDAwMDAwMTA3MCAwMDAwMCBuIAowMDAwMDAxMTI5IDAwMDAwIG4gCnRyYWlsZXIKPDwKL0lEIApbPGQ2ZjQ0MmE5ZWVmZmVlM2Q5OTNiZTM0NTk0ZTRjZjJlPjxkNmY0NDJhOWVlZmZlZTNkOTkzYmUzNDU5NGU0Y2YyZT5dCiUgUmVwb3J0TGFiIGdlbmVyYXRlZCBQREYgZG9jdW1lbnQgLS0gZGlnZXN0IChvcGVuc291cmNlKQoKL0luZm8gOCAwIFIKL1Jvb3QgNyAwIFIKL1NpemUgMTEKPj4Kc3RhcnR4cmVmCjI4NTUKJSVFT0YK</script>
 <script type="text/plain" id="guide-payrolltools">JVBERi0xLjQKJZOMi54gUmVwb3J0TGFiIEdlbmVyYXRlZCBQREYgZG9jdW1lbnQgKG9wZW5zb3VyY2UpCjEgMCBvYmoKPDwKL0YxIDIgMCBSIC9GMiAzIDAgUgo+PgplbmRvYmoKMiAwIG9iago8PAovQmFzZUZvbnQgL0hlbHZldGljYSAvRW5jb2RpbmcgL1dpbkFuc2lFbmNvZGluZyAvTmFtZSAvRjEgL1N1YnR5cGUgL1R5cGUxIC9UeXBlIC9Gb250Cj4+CmVuZG9iagozIDAgb2JqCjw8Ci9CYXNlRm9udCAvSGVsdmV0aWNhLUJvbGQgL0VuY29kaW5nIC9XaW5BbnNpRW5jb2RpbmcgL05hbWUgL0YyIC9TdWJ0eXBlIC9UeXBlMSAvVHlwZSAvRm9udAo+PgplbmRvYmoKNCAwIG9iago8PAovQ29udGVudHMgOSAwIFIgL01lZGlhQm94IFsgMCAwIDU5NS4yNzU2IDg0MS44ODk4IF0gL1BhcmVudCA4IDAgUiAvUmVzb3VyY2VzIDw8Ci9Gb250IDEgMCBSIC9Qcm9jU2V0IFsgL1BERiAvVGV4dCAvSW1hZ2VCIC9JbWFnZUMgL0ltYWdlSSBdCj4+IC9Sb3RhdGUgMCAvVHJhbnMgPDwKCj4+IAogIC9UeXBlIC9QYWdlCj4+CmVuZG9iago1IDAgb2JqCjw8Ci9Db250ZW50cyAxMCAwIFIgL01lZGlhQm94IFsgMCAwIDU5NS4yNzU2IDg0MS44ODk4IF0gL1BhcmVudCA4IDAgUiAvUmVzb3VyY2VzIDw8Ci9Gb250IDEgMCBSIC9Qcm9jU2V0IFsgL1BERiAvVGV4dCAvSW1hZ2VCIC9JbWFnZUMgL0ltYWdlSSBdCj4+IC9Sb3RhdGUgMCAvVHJhbnMgPDwKCj4+IAogIC9UeXBlIC9QYWdlCj4+CmVuZG9iago2IDAgb2JqCjw8Ci9QYWdlTW9kZSAvVXNlTm9uZSAvUGFnZXMgOCAwIFIgL1R5cGUgL0NhdGFsb2cKPj4KZW5kb2JqCjcgMCBvYmoKPDwKL0F1dGhvciAoQ2xpZW50IFRvb2xzKSAvQ3JlYXRpb25EYXRlIChEOjIwMjYwNzI4MTIzNTQzKzAwJzAwJykgL0NyZWF0b3IgKFwodW5zcGVjaWZpZWRcKSkgL0tleXdvcmRzICgpIC9Nb2REYXRlIChEOjIwMjYwNzI4MTIzNTQzKzAwJzAwJykgL1Byb2R1Y2VyIChSZXBvcnRMYWIgUERGIExpYnJhcnkgLSBcKG9wZW5zb3VyY2VcKSkgCiAgL1N1YmplY3QgKFwodW5zcGVjaWZpZWRcKSkgL1RpdGxlIChQYXlyb2xsIFRvb2xzIFwyMDQgSG93IFRvKSAvVHJhcHBlZCAvRmFsc2UKPj4KZW5kb2JqCjggMCBvYmoKPDwKL0NvdW50IDIgL0tpZHMgWyA0IDAgUiA1IDAgUiBdIC9UeXBlIC9QYWdlcwo+PgplbmRvYmoKOSAwIG9iago8PAovRmlsdGVyIFsgL0FTQ0lJODVEZWNvZGUgL0ZsYXRlRGVjb2RlIF0gL0xlbmd0aCAyMjEyCj4+CnN0cmVhbQpHYXVgVGdOTSUqJ1JmRk9TQ05DZ1lTLSFuQV9uOC1US28yLUFmKTxGNipdTj5lQCZXKkJkUzxvOCE8NyEtKFRedENQTDFvW1VnSW5tc1FmTCg3PW0lZUYwMTVwYGtPVlk6UW5vTGJsOD9faElrS1NBWVphIz9FcTclaDZSZ0QkXidUWVRjPEtmQzViSkg9OkwhQCg7NlkiOmpAV2QnaitVQipVRG1lUV1rOCRhYTtvQUxcKHJTSCVnN3FwVWA+MHVQLnVeN1czO05VT1JWcF1XPjBwI2pmYVBHXHVsSkc+TztgW0NcIz1jLVx1UVhaQFtCXTtvQGhbTjlaY0Q/b2E7SmBhRD47LCouWEQ0P2kmOUZHJGgzUkhETGpJNzFARGBfdV1ZK3U9TXE4MzFSXEJmNiRPdEVMISkxSUJFbFwqbG1nXEZKR0BVbVBgPCpxOFNIcWFBaE8zQ0NUJihHQkMhI2giWyctbnNXSC1QcUJdXiE5PzhoRCYiYE1bPT9HY01yWTl1IzhcRkQiYlFCW1toPWQzQ0A4ZFxwLVJJWzBTO1BrI0drOUg/SD1JdU5RM2RjclU2YF1hITIzcmFOMDNXRWZqdHNXa1I6cjhQOl9QMChZXCdbWCZVRmxoJm1lOFo2NCtIMU00QFFJY0F1PDUvK0YoL0wsNSxvVytiIWtUZ2I3PCdyOyxRbzlyUWphQWknSS9ScCJiQWkzOiQ/QWZEQytZc0g9M01qIUU2ZjNuXjBdI1NnPzgjaFpfJkk5aiM/U0BfWHIkbEhoOVBFM1E3VWVbPks4UE0+RlgzYWtXRm0rM0JqYCwlJ0BiV21hI0xKW25hRShDaCFwR0cicClSZFMlaUloJjcmP01TQlpMRjIhPWo1Wj83QDpDYWVxMCdFLmhrZ19KKFlFYSkhPTQuYlk/S2coLWRSXEQ1ZWdCSVQxRksvNiFxOlw2JFgtNTxOSDMvMWVXVHBmQkYwX2JFKjJXNkMnTjNuO0IxMmdDQTkhQFVaQmNNTUhNYl1iQmNoJ1M8UGhAPjhjOzVdLSJoTV1vL1NEK1MqXGEqUzdxakplMCswIzltRVwuTVJmOCtTRGMtLktgRiUjdFJic0g3ckRYXUhAWVY4PW0iU2cwSzlkOmBRKDNmcVA/L0FxWkdEa25aS0ElNVdmLGNbcEJKN29CbXU5bENrUyFcOihVOWUiTFdkQVAwQlBtXlg8M2RWL15UNGs4dDdgcWJiTy9SVTM9SlBMMkU2Li0+JGs9dTk4VTJWcSNLTXErVTg3M2VZYzZ0PWcqT0U3cWF1JSJOKlUrVlBxWkxbPmAndTJIJUdVTzddQWMlSTJGb1wjO0chSG1kKS1GQC0pXXVrQjcyLG1FZzVuJzBUN2hMYmJZO1c/LVRhJk1FaVFDOyJNOGhtQHJVMzY7Yzo5TDYuaEdyXGc3UXIrOjIuOCRPKl5IbiJLS1pNLDxnYEleakMsJ2FRP28wXV0kX3FVIkhcIlRVQTxFKDFEU1pOZy0iTCVCSShKaD8qOS5mLjs3Zm5zIV9cY1tiYGE4Mk9ac1hbWj5zb1pQKiZBLjNQSF9bUTVjXkElaSJWQzc4KElBV1JLYEczNG48X2k5XWpKSCFvZDtpNnRFLy0yPkVaOGdGJyNGT0M9JkY/czRbPC4iQD5XSVo5UUtdVUBbUSE7QzRKbkJLLTwtdGddO3VlaGgrYUpqOFdbJWRHXTttP1cxcm5bYFcpRFxyMVFfIVllVlVCSk0hPW1LPUdMTGtbdGpPKFBPRCdsO2xwQ0lBMGwiNmBgISMoUTczIz07Iz4vJW46YD9vSE1lPiQkLzQ+VmVtZlxZW0YoYElmIyljITFKRltlUEVtX11pODUvJmReRV0yKihaN143Pl1STFQuZjIpZ2JoWytqQUhWXEYybU1cJnQtMCRbaEVmUyk0Lm5RKyprNnFLI0siVHAkRkE3JlpjKWE6PV1LPlxZLD5BbFRISCdqI3Bea2YsJ2ckZVRbJlAmPmYlMF1XOGFjUmVfKDJRPEUjUWgoVmFbPD5LXVloWFlwdUI/Mi1uVjxCMl4oZXVrXG1qWGJRbiMxVmFwVS5JPG9RQTdjWCRKYldQYXNFUllYaEUzL0o0Mm0kXW9hRXJqZVRHQmhEPCxqXGFNdC4xNlxgQFJLRklCUmBaM1E4NkBnPE1cOUJdWFBmISc+WEhIWidQTi5tbHNbYmQqMkcmJi1lSCRrXCthJ0hLV1tMJzkjKyhRNy5OLjxWJEQkUThMW2dGZjYlTj09Z0owZjZEM1psYE1XIzg7WF9tMC5PV0RhaEI9ZUZjYilEbUQ1WjA1PTBxMFghL1doXEk2ZjVOX0NgSlctNGhWKGAsNGRBZ201V1gwSzktMEQ3SzQ+MSNeO2U2WjRnYjEqLFFIXiVwWShfOllJPFBMWj5cIW1JTmBYK0snXm9TZEBfXTtgXHMhZTVIL1FrQVJPOmxpUScrM2I2JWU4VGhiLywiMElEQihFQEdJY1BEZUpXSyJDSkR0cmJiXExHLjdkcTYxYkZEZ0shO0VYbytkciFIZl9uUCReOVY9RyxKW2BjSmNaWC9NczJIPlZUImdyUWs9THRdP1hHbzFjSE00Skk9PVchPWxeMkFhZGpWN3VfbStEVFlITiEwNGlDNm5zO0I8YEtAMTZDcFU4cS9YZzVaQEVhUnMnR2MmJDZFPShELiYwMlNVZWteaW9MakRZRVgmczxJMnFmP0hUNiRpXlpJdV09JTBRLitfUjQ+KlNQcGhkYD4iKDItRCElIUAhcGo+UT9GT01CayhoPDtZcTQyT1hVaWMxJispQSxyV21PcyRnTzEvV2NLO2tRIz5ELSJ1OkZdNTxmWDomLi5xUDBaKDlLKSRaZiM9TCxuWyI8SytAP0FnXElua3FBLXFdOUdGXnRjRzolTCpEdENtakxOcVM5cDNfKCFTKH4+ZW5kc3RyZWFtCmVuZG9iagoxMCAwIG9iago8PAovRmlsdGVyIFsgL0FTQ0lJODVEZWNvZGUgL0ZsYXRlRGVjb2RlIF0gL0xlbmd0aCAzMDAKPj4Kc3RyZWFtCkdhclc0NT5NQTklKXFzZ01EbFxkI2FcZnFYcm90cio9QGVFX0snQmkpS188RTA8K2dAblhWL0o6ZygoL2dYIVdJSlZIS0JHcmwiZSE9cGdiNjZiYj4nTllQajQ5cCU/aVxHM2ZEaUwhY2cybDU0VmAiMHNbO1dVZG9UK3JIUzglJkRFTW1XSjRoL3RkOE9fL2plSSRdOlpGaFJvOnRmb2skKSdZRyU+ZUdXRHVEbkdfQTdWckxqPClCWDszSSxbX2BjYTJORE9RVjVMWkI4PzRTRURxcU0tV0ZGWVgqWzczUCdRWlxbYTFlNDo7TjpJN2RVSTo/amNGTiRCP0lqVj5dPj5CJUMpXjc3JHAkWGxiNGwsRCUiKkdwZClFXl5HX2o+cjttZ3M7WUx+PmVuZHN0cmVhbQplbmRvYmoKeHJlZgowIDExCjAwMDAwMDAwMDAgNjU1MzUgZiAKMDAwMDAwMDA2MSAwMDAwMCBuIAowMDAwMDAwMTAyIDAwMDAwIG4gCjAwMDAwMDAyMDkgMDAwMDAgbiAKMDAwMDAwMDMyMSAwMDAwMCBuIAowMDAwMDAwNTI0IDAwMDAwIG4gCjAwMDAwMDA3MjggMDAwMDAgbiAKMDAwMDAwMDc5NiAwMDAwMCBuIAowMDAwMDAxMDg3IDAwMDAwIG4gCjAwMDAwMDExNTIgMDAwMDAgbiAKMDAwMDAwMzQ1NSAwMDAwMCBuIAp0cmFpbGVyCjw8Ci9JRCAKWzxjMmMyNTAzYzdjNTY4Mzg3YzcxOWU5MjZkMzY4N2M3Nz48YzJjMjUwM2M3YzU2ODM4N2M3MTllOTI2ZDM2ODdjNzc+XQolIFJlcG9ydExhYiBnZW5lcmF0ZWQgUERGIGRvY3VtZW50IC0tIGRpZ2VzdCAob3BlbnNvdXJjZSkKCi9JbmZvIDcgMCBSCi9Sb290IDYgMCBSCi9TaXplIDExCj4+CnN0YXJ0eHJlZgozODQ2CiUlRU9GCg==</script>
 <script type="text/plain" id="guide-staffmanager"><!DOCTYPE html>
