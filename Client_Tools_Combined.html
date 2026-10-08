@@ -435,8 +435,10 @@
   .page-who .tab-btn.hold{color:#5b3fa0;border-color:#cfc5e6;}
   .page-who .tab-btn.hold .count{background:#5b3fa0;}
   .page-who .tab-btn.hold.active{background:#EEE9F7;}
-  .page-who td.ns-reason{font-size:0.85rem;color:var(--muted);cursor:pointer;}
-  .page-who td.ns-reason:hover{background:#f3f0fa;}
+  .page-who td.ns-note{min-width:180px;width:26%;}
+  .page-who .ns-note-edit{min-height:1.3em;font-size:0.85rem;color:var(--ink);border-bottom:1px dashed var(--line);padding:2px 4px;outline:none;white-space:pre-wrap;word-break:break-word;}
+  .page-who .ns-note-edit:hover{background:#faf9f7;}
+  .page-who .ns-note-edit:focus{background:#fffbe6;border-bottom-color:var(--ink);}
 
 
   .page-who .tabs{
@@ -1371,7 +1373,7 @@
           <th data-sort="amount" style="text-align:right;">Amount Owed</th>
           <th style="text-align:center;">Invoices</th>
           <th>Status</th>
-          <th id="nsReasonTh" style="display:none;">Note</th>
+          <th id="nsReasonTh">Notes</th>
         </tr>
       </thead>
       <tbody id="resultsBody"></tbody>
@@ -6473,7 +6475,9 @@ loadRoster();
   .detail-table tr:last-child td{border-bottom:none;}
   .type-tag{font-size:11px;color:var(--muted);}
   .notes-cell{min-width:130px;color:var(--muted);}
-  .notes-cell .notes-line{border-bottom:1px solid #D6D7DA;height:16px;}
+  .notes-cell .notes-line{border-bottom:1px solid #D6D7DA;min-height:16px;white-space:pre-wrap;word-break:break-word;font-size:12.5px;color:var(--ink);outline:none;padding:1px 2px;}
+  .notes-cell .notes-line:hover{background:#FAFAFA;}
+  .notes-cell .notes-line:focus{background:#FFF9E0;border-bottom-color:var(--ink);}
 
   .empty-state{
     text-align:center;
@@ -6576,7 +6580,7 @@ loadRoster();
     .detail-row{break-inside:avoid;}
     .chev{display:none;}
     tbody tr.supplier-row:hover{background:none;}
-    .notes-cell .notes-line{border-bottom:1px solid #999;height:18px;}
+    .notes-cell .notes-line{border-bottom:1px solid #999;min-height:18px;background:none !important;}
   }
 </style>
 </head>
@@ -6847,6 +6851,7 @@ let expandedPayments = new Set(); // payment ids currently expanded in Payments 
 let holdItems = [];            // [{id, company, invoiceNumber, reference, dueDate, amount, createdAt}] - invoices parked as "Not Paying" (Supabase: wdwo_not_paying)
 let holdIndex = new Map();     // billKey -> holdItem
 let selectedHold = new Set();  // hold item ids selected in the Not Paying tab
+let invNotes = new Map();      // billKey -> note text (Supabase: wdwo_notes) - notes typed against an invoice, remembered week to week
 let expandedHold = new Set();  // supplier names expanded in the Not Paying tab
 
 // Canonical key used to match an invoice in Who Do We Owe to a payment_item
@@ -7232,7 +7237,7 @@ function render(){
           <td class="amount ${inv.total<0?'negative':''}">${fmtMoney(inv.total)}</td>
           <td class="amount ${inv.amountDue<0?'negative':''}">${fmtMoney(inv.amountDue)}</td>
           <td>${statusCell}</td>
-          <td class="notes-cell"><div class="notes-line"></div></td>
+          <td class="notes-cell">${noteCellHTML(inv.company, inv.invoiceNumber, inv.reference)}</td>
         </tr>
       `;
       }).join('');
@@ -7248,6 +7253,7 @@ function render(){
           </table>
         </div>
       `;
+      bindNoteEditors(td);
       td.querySelectorAll('.bill-select-checkbox').forEach(cb => {
         const key = cb.dataset.key;
         cb.checked = selectedBills.has(key);
@@ -7435,6 +7441,75 @@ document.getElementById('createPaymentBtn').addEventListener('click', async () =
 });
 
 
+
+/* ---------- Invoice notes (Supabase-backed: table wdwo_notes) ---------- */
+// A note typed against an invoice is saved to the shared database and matched
+// back up (supplier + invoice number) every time a Bills report is loaded, so
+// it shows on the page and on the printout week after week.
+
+async function refreshNotes(){
+  try{
+    const { data, error } = await sb.from('wdwo_notes').select('note_key, note');
+    if(error) throw error;
+    invNotes = new Map();
+    (data || []).forEach(r => { if(r.note) invNotes.set(r.note_key, r.note); });
+    return true;
+  } catch(err){
+    console.error('Could not load invoice notes from Supabase', err);
+    const banner = document.getElementById('billsLoadError');
+    banner.textContent = 'Could not load saved notes — ' + (err && err.message ? err.message : 'unknown error') + '. Check the wdwo_notes table exists in Supabase (see the How To guide). Notes you type will not be saved until it does.';
+    banner.style.display = 'block';
+    return false;
+  }
+}
+
+async function saveInvoiceNote(el){
+  const key = el.dataset.key;
+  const text = (el.innerText || '').replace(/ /g, ' ').trim();
+  const before = invNotes.get(key) || '';
+  if(text === before) return;
+  try{
+    if(text){
+      const { error } = await sb.from('wdwo_notes').upsert({
+        note_key: key,
+        company: el.dataset.company || null,
+        invoice_number: el.dataset.inv || null,
+        reference: el.dataset.ref || null,
+        note: text,
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'note_key' });
+      if(error) throw error;
+      invNotes.set(key, text);
+    } else {
+      const { error } = await sb.from('wdwo_notes').delete().eq('note_key', key);
+      if(error) throw error;
+      invNotes.delete(key);
+    }
+  } catch(err){
+    console.error(err);
+    el.textContent = before;
+    alert('Could not save that note — ' + (err && err.message ? err.message : 'unknown error') + '. Check the wdwo_notes table exists in Supabase.');
+  }
+}
+
+function noteCellHTML(company, invoiceNumber, reference){
+  const key = billKey(company, invoiceNumber || reference);
+  return `<div class="notes-line note-edit" contenteditable="true" spellcheck="true" data-key="${escapeAttr(key)}" data-company="${escapeAttr(company || '')}" data-inv="${escapeAttr(invoiceNumber || '')}" data-ref="${escapeAttr(reference || '')}">${escapeHTML(invNotes.get(key) || '')}</div>`;
+}
+
+function bindNoteEditors(container){
+  container.querySelectorAll('.note-edit').forEach(el => {
+    el.addEventListener('click', e => e.stopPropagation());
+    el.addEventListener('blur', () => saveInvoiceNote(el));
+    el.addEventListener('keydown', e => { if(e.key === 'Enter' && !e.shiftKey){ e.preventDefault(); el.blur(); } });
+    el.addEventListener('paste', e => {
+      e.preventDefault();
+      const t = (e.clipboardData || window.clipboardData).getData('text');
+      document.execCommand('insertText', false, t);
+    });
+  });
+}
+
 /* ---------- Not Paying tab (Supabase-backed: table wdwo_not_paying) ---------- */
 // Invoices the Directors don't want paid yet are parked here. They're saved to
 // the shared database, so they're remembered the next time a Bills report is
@@ -7572,15 +7647,17 @@ function renderHold(){
           <td>${fmtDate(it.createdAt)}</td>
           <td class="amount ${it.amount<0?'negative':''}">${fmtMoney(it.amount)}</td>
           <td>${status}</td>
+          <td class="notes-cell">${noteCellHTML(it.company, it.invoiceNumber, it.reference)}</td>
         </tr>`;
       }).join('');
       td.innerHTML = `
         <div class="detail-wrap">
           <table class="detail-table">
-            <thead><tr><th style="width:30px;"></th><th>Invoice</th><th>Reference</th><th>Due Date</th><th>Parked On</th><th>Amount</th><th></th></tr></thead>
+            <thead><tr><th style="width:30px;"></th><th>Invoice</th><th>Reference</th><th>Due Date</th><th>Parked On</th><th>Amount</th><th></th><th>Notes</th></tr></thead>
             <tbody>${rows}</tbody>
           </table>
         </div>`;
+      bindNoteEditors(td);
       td.querySelectorAll('.hold-item-cb').forEach(cb => {
         cb.addEventListener('click', (e) => e.stopPropagation());
         cb.addEventListener('change', (e) => {
@@ -7716,6 +7793,7 @@ function paymentEffectiveDate(p){
 // already have a payment against them.
 async function refreshRaisedPayments(){
   await refreshHold();
+  await refreshNotes();
   try{
     const { data, error } = await sb
       .from('wdwo_payments')
@@ -13907,10 +13985,10 @@ loadSubs();
   <p>For clients who owe money but have an ongoing issue — a dispute, a payment plan, a solicitor involved — so they stop appearing in the list every week.</p>
   <ol>
     <li>On any tab (<span class="tag">T-</span>, <span class="tag">S-</span>, <span class="tag">SI-</span> or <span class="tag">⚠ Needs Review</span>) tick the box next to each client, or use the box in the header to tick everyone on the tab.</li>
-    <li>Click <span class="tag">Stop sending statements (move to Not Sending)</span>. You'll be asked for an optional note — for example <em>"Dispute — chasing separately"</em>.</li>
+    <li>Click <span class="tag">Stop sending statements (move to Not Sending)</span>. You'll be asked for an optional note — for example <em>"Dispute — chasing separately"</em> — which is saved as that client's note (see section 3).</li>
     <li>Those clients move to the purple <span class="tag">⏸ Not Sending Statements</span> tab. They no longer count in <em>Clients to statement</em> or <em>Total owed</em>, and no longer show on any other tab.</li>
     <li>On the Not Sending tab you can see what each held client currently owes in the report you've loaded. If a client isn't in the loaded report (e.g. they've paid), it shows <em>Not in report</em>.</li>
-    <li>Click a note to edit it. The tab can be printed or exported to CSV like any other, with the note included.</li>
+    <li>The tab can be printed or exported to CSV like any other, with the notes included.</li>
     <li>To start sending statements again, tick the client(s) on the Not Sending tab and click <span class="tag">Release — include in statements again</span>.</li>
   </ol>
 
@@ -13924,6 +14002,19 @@ loadSubs();
 
   <div class="note">
     <strong>Shared and live.</strong> Because the list lives in the same database for everyone, a client held on one computer is held everywhere. Anyone using the tool can hold or release clients, so there is no undo — release a client to put them back.
+  </div>
+
+  <h2>3. Notes on clients</h2>
+  <p>Every client row has a <strong>Notes</strong> box on the right, on every tab including Not Sending.</p>
+  <ol>
+    <li>Click in the Notes box and type — for example <em>"Promised to pay Friday"</em> or <em>"Spoke to Jo 8 Oct"</em>.</li>
+    <li>Press <span class="tag">Enter</span> or click elsewhere to save (use <span class="tag">Shift + Enter</span> for a new line). It saves straight to the shared database.</li>
+    <li>Notes appear in the Notes column when you <span class="tag">Print this tab</span>, and in the Note column of <span class="tag">Export CSV</span>.</li>
+    <li>Next week, when you load a new Aged Receivables export, each client's note is pulled back through automatically — matched on account number, or on company name where there's no account number. To remove a note, clear the box and click away.</li>
+  </ol>
+
+  <div class="warn">
+    <strong>One-off set-up:</strong> notes need a table in Supabase called <code>wns_notes</code>. Run the <code>notes_tables.sql</code> file supplied with this update once in the Supabase SQL Editor. Until then you'll see a "Could not load the Not Sending Statements list" message — the notes table is needed for the tab to load.
   </div>
 
   <p style="color:#6f7175;font-size:13px;margin-top:32px;">Part of the Client Tools suite — Sunshine Windows &amp; Tameside Trade Plastics.</p>
@@ -14339,7 +14430,20 @@ loadSubs();
     <strong>One-off set-up:</strong> the Not Paying tab needs a table in Supabase called <code>wdwo_not_paying</code>. Run the SQL supplied with this update once, in the Supabase SQL Editor — until then the tab will show a "Could not load" message.
   </div>
 
-  <h2>5. Importing historical paid bills</h2>
+  <h2>5. Notes on invoices</h2>
+  <p>Every invoice in the expanded supplier view has a <strong>Notes</strong> box on its right-hand side — it replaces the blank line that used to be there for handwriting.</p>
+  <ol>
+    <li>Click in the Notes box next to an invoice and type — for example <em>"Director says wait until November"</em>.</li>
+    <li>Press <span class="tag">Enter</span> or click elsewhere. The note saves straight to the shared database (use <span class="tag">Shift + Enter</span> for a new line).</li>
+    <li>It prints in the Notes column on the printout, and notes also show against the invoice in the Not Paying tab.</li>
+    <li>Next time you load a new Bills report the note is pulled back through automatically, matched on supplier and invoice number. To remove a note, clear the box and click away.</li>
+  </ol>
+
+  <div class="warn">
+    <strong>One-off set-up:</strong> notes need a table in Supabase called <code>wdwo_notes</code>. Run the <code>notes_tables.sql</code> file supplied with this update once in the Supabase SQL Editor. Until then you'll see a "Could not load saved notes" message and notes will not save.
+  </div>
+
+  <h2>6. Importing historical paid bills</h2>
   <p>Open the <strong>"Import historical Paid Bills"</strong> section at the bottom of Payments Raised. Upload a Xero Paid Bills export and each bill imports as its own already-paid payment — a one-time way to bring your existing backlog into the system without needing to raise each one by hand.</p>
 
   <div class="warn">
@@ -14352,8 +14456,7 @@ loadSubs();
 
 </div>
 </body>
-</html>
-</script>
+</html></script>
 <script type="text/plain" id="guide-subinvoices"><!DOCTYPE html>
 <html lang="en">
 <head>
@@ -14548,6 +14651,7 @@ let nsIndex = new Map();     // key -> item
 let nsSelected = new Set();  // keys ticked on screen
 let nsVisibleKeys = [];      // keys of rows currently shown (for "select all")
 let nsLoadError = '';
+let nsNotes = new Map();     // key -> note text (Supabase: wns_notes), remembered week to week
 
 async function loadExempt(){
   try{
@@ -15200,6 +15304,10 @@ async function nsLoad(){
       .select('match_key, created_at, account_number, company, reason')
       .order('company', { ascending: true });
     if (error) throw error;
+    const nres = await nsDb.from('wns_notes').select('note_key, note');
+    if (nres.error) throw nres.error;
+    nsNotes = new Map();
+    (nres.data || []).forEach(r => { if (r.note) nsNotes.set(r.note_key, r.note); });
     nsItems = (data || []).map(r => ({
       key: r.match_key,
       company: r.company || '',
@@ -15214,7 +15322,7 @@ async function nsLoad(){
     return true;
   } catch(err){
     console.error('Could not load Not Sending Statements list', err);
-    nsLoadError = 'Could not load the Not Sending Statements list — ' + (err && err.message ? err.message : 'unknown error') + '. Check the wns_statement_hold table exists in Supabase (see the How To guide).';
+    nsLoadError = 'Could not load the Not Sending Statements list — ' + (err && err.message ? err.message : 'unknown error') + '. Check the wns_statement_hold and wns_notes tables exist in Supabase (see the How To guide).';
     render();
     return false;
   }
@@ -15236,7 +15344,7 @@ function nsTabRows(filtered, tab){
           invoiceCount: c ? (c.invoiceCount || 0) : 0,
           overdue: c ? round2(c.overdue) > 0.004 : false,
           inReport: !!c,
-          reason: it.reason
+          note: nsNotes.get(it.key) || it.reason || ''
         };
       });
   }
@@ -15244,7 +15352,7 @@ function nsTabRows(filtered, tab){
   return (buckets[tab] || []).map(c => ({
     key: nsKey(c.acct, c.name), name: c.name, acct: c.acct,
     total: c.total, invoiceCount: c.invoiceCount || 0,
-    overdue: round2(c.overdue) > 0.004, inReport: true, reason: ''
+    overdue: round2(c.overdue) > 0.004, inReport: true, note: nsNotes.get(nsKey(c.acct, c.name)) || ''
   }));
 }
 
@@ -15320,8 +15428,6 @@ function render(){
   else label = activeList.length + ' client' + (activeList.length===1?'':'s') + ' on ' + tabLabel(currentTab) + ' — ' + fmt(round2(tabTotal)) + ' owed';
   document.getElementById('resultsLabel').textContent = label;
 
-  document.getElementById('nsReasonTh').style.display = isHold ? '' : 'none';
-
   // Drop any selections that are no longer on screen
   nsVisibleKeys = activeList.map(r => r.key);
   Array.from(nsSelected).forEach(k => { if (!nsVisibleKeys.includes(k)) nsSelected.delete(k); });
@@ -15337,14 +15443,20 @@ function render(){
       <td class="amount">${nsFmt(c)}</td>
       <td style="text-align:center;">${c.inReport ? c.invoiceCount : '—'}</td>
       <td>${nsStatusBadge(c)}</td>
-      ${isHold ? `<td class="ns-reason" title="Click to edit the note">${c.reason ? escapeHtml(c.reason) : '<em>Click to add a note</em>'}</td>` : ''}
+      <td class="ns-note"><div class="ns-note-edit" contenteditable="true" spellcheck="true" data-key="${escapeHtml(c.key)}" data-company="${escapeHtml(c.name)}" data-acct="${escapeHtml(c.acct || '')}">${escapeHtml(c.note || '')}</div></td>
     `;
     tr.querySelector('.ns-cb').addEventListener('change', e => {
       if (e.target.checked) nsSelected.add(c.key); else nsSelected.delete(c.key);
       nsRenderBulk();
     });
-    const rc = tr.querySelector('.ns-reason');
-    if (rc) rc.addEventListener('click', () => nsEditReason(c));
+    const ne = tr.querySelector('.ns-note-edit');
+    ne.addEventListener('blur', () => nsSaveNote(ne));
+    ne.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey){ e.preventDefault(); ne.blur(); } });
+    ne.addEventListener('paste', e => {
+      e.preventDefault();
+      const t = (e.clipboardData || window.clipboardData).getData('text');
+      document.execCommand('insertText', false, t);
+    });
     body.appendChild(tr);
   });
 
@@ -15389,6 +15501,13 @@ document.getElementById('nsHoldBtn').addEventListener('click', async () => {
     }));
     const { error } = await nsDb.from('wns_statement_hold').upsert(payload, { onConflict: 'match_key' });
     if (error) throw error;
+    if (reason.trim()){
+      const { error: nErr } = await nsDb.from('wns_notes').upsert(rows.map(r => ({
+        note_key: r.key, company: r.name, account_number: r.acct || null,
+        note: reason.trim(), updated_at: new Date().toISOString()
+      })), { onConflict: 'note_key' });
+      if (nErr) throw nErr;
+    }
     nsSelected.clear();
     await nsLoad();
   } catch(err){
@@ -15410,15 +15529,29 @@ document.getElementById('nsReleaseBtn').addEventListener('click', async () => {
   }
 });
 
-async function nsEditReason(r){
-  const val = prompt('Note for ' + r.name + ':', r.reason || '');
-  if (val === null) return;
+async function nsSaveNote(el){
+  const key = el.dataset.key;
+  const text = (el.innerText || '').replace(/\u00a0/g, ' ').trim();
+  const before = nsNotes.get(key) || '';
+  if (text === before) return;
+  if (!nsDb){ el.textContent = before; alert('The database is not available — refresh the page and try again.'); return; }
   try{
-    const { error } = await nsDb.from('wns_statement_hold').update({ reason: val.trim() || null }).eq('match_key', r.key);
-    if (error) throw error;
-    await nsLoad();
+    if (text){
+      const { error } = await nsDb.from('wns_notes').upsert({
+        note_key: key, company: el.dataset.company || null, account_number: el.dataset.acct || null,
+        note: text, updated_at: new Date().toISOString()
+      }, { onConflict: 'note_key' });
+      if (error) throw error;
+      nsNotes.set(key, text);
+    } else {
+      const { error } = await nsDb.from('wns_notes').delete().eq('note_key', key);
+      if (error) throw error;
+      nsNotes.delete(key);
+    }
   } catch(err){
-    alert('Could not save that note — ' + (err && err.message ? err.message : 'unknown error') + '.');
+    console.error(err);
+    el.textContent = before;
+    alert('Could not save that note — ' + (err && err.message ? err.message : 'unknown error') + '. Check the wns_notes table exists in Supabase.');
   }
 }
 
@@ -15429,10 +15562,9 @@ function escapeHtml(s){
 function exportCSV(){
   const activeList = currentTab ? nsTabRows(getFiltered(), currentTab) : [];
   const isHold = currentTab === 'HOLD';
-  let csv = 'Company Name,Account Number,Amount Owed,Invoices,Status' + (isHold ? ',Note' : '') + '\n';
+  let csv = 'Company Name,Account Number,Amount Owed,Invoices,Status,Note\n';
   activeList.forEach(c => {
-    csv += `"${c.name.replace(/"/g,'""')}","${(c.acct || '').replace(/"/g,'""')}",${c.total == null ? '' : round2(c.total).toFixed(2)},${c.inReport ? c.invoiceCount : ''},${nsStatusText(c)}` +
-           (isHold ? `,"${(c.reason || '').replace(/"/g,'""')}"` : '') + '\n';
+    csv += `"${c.name.replace(/"/g,'""')}","${(c.acct || '').replace(/"/g,'""')}",${c.total == null ? '' : round2(c.total).toFixed(2)},${c.inReport ? c.invoiceCount : ''},${nsStatusText(c)},"${(c.note || '').replace(/"/g,'""')}"\n`;
   });
   const blob = new Blob([csv], {type:'text/csv'});
   const url = URL.createObjectURL(blob);
@@ -15469,7 +15601,7 @@ function printCurrentTab(){
       <td class="p-amount">${nsFmt(c)}</td>
       <td class="p-invoices">${c.inReport ? c.invoiceCount : '—'}</td>
       <td class="p-status">${nsStatusText(c)}</td>
-      <td class="p-notes">${isHold ? escapeHtml(c.reason || '') : ''}</td>
+      <td class="p-notes">${escapeHtml(c.note || '')}</td>
     </tr>`;
   });
 
