@@ -6,6 +6,7 @@
 <title>Sunshine Windows / TTP — Client Tools</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style id="dynamicPageStyle"></style>
 <style>
 
@@ -429,6 +430,14 @@
   }
   .page-who .badge.overdue{background:var(--danger-light);color:var(--danger);}
   .page-who .badge.current{background:#e9e8e6;color:var(--muted);}
+  /* ---- Not Sending Statements (held clients) ---- */
+  .page-who .badge.hold{background:#EEE9F7;color:#5b3fa0;}
+  .page-who .tab-btn.hold{color:#5b3fa0;border-color:#cfc5e6;}
+  .page-who .tab-btn.hold .count{background:#5b3fa0;}
+  .page-who .tab-btn.hold.active{background:#EEE9F7;}
+  .page-who td.ns-reason{font-size:0.85rem;color:var(--muted);cursor:pointer;}
+  .page-who td.ns-reason:hover{background:#f3f0fa;}
+
 
   .page-who .tabs{
     display:flex;
@@ -1327,10 +1336,12 @@
     </div>
 
     <div class="error" id="errorBox"></div>
+    <div class="error" id="nsErrorBox" style="display:none;"></div>
 
     <div class="stat-row" id="statRow" style="display:none;">
       <div class="stat"><div class="n" id="statCount">0</div><div class="l">Clients to statement</div></div>
       <div class="stat"><div class="n" id="statTotal">£0.00</div><div class="l">Total owed</div></div>
+      <div class="stat"><div class="n" id="nsStatHold">0</div><div class="l">Not sending (held)</div></div>
     </div>
   </div>
 
@@ -1343,14 +1354,24 @@
         <button class="secondary" id="exportBtn">Export CSV (this tab)</button>
       </div>
     </div>
+    <div class="toolbar" id="nsBulkBar" style="display:none;">
+      <span id="nsBulkInfo" style="font-size:0.9rem;color:var(--muted);font-weight:600;"></span>
+      <div style="display:flex;gap:8px;">
+        <button class="secondary" id="nsHoldBtn" type="button">Stop sending statements (move to Not Sending)</button>
+        <button class="secondary" id="nsReleaseBtn" type="button">Release — include in statements again</button>
+        <button class="secondary" id="nsClearBtn" type="button">Clear selection</button>
+      </div>
+    </div>
     <table>
       <thead>
         <tr>
+          <th style="width:34px;"><input type="checkbox" id="nsSelectAll" title="Select all in this tab"></th>
           <th data-sort="name">Company Name</th>
           <th data-sort="acct">Account Number</th>
           <th data-sort="amount" style="text-align:right;">Amount Owed</th>
           <th style="text-align:center;">Invoices</th>
           <th>Status</th>
+          <th id="nsReasonTh" style="display:none;">Note</th>
         </tr>
       </thead>
       <tbody id="resultsBody"></tbody>
@@ -6396,6 +6417,7 @@ loadRoster();
   .badge.ok{background:#EAF6EF;color:var(--good);}
   .badge.none{background:#F0F0F1;color:var(--muted);}
   .badge.duesoon{background:#FDF3E3;color:var(--warn);}
+  .badge.hold{background:#EEE9F7;color:#5b3fa0;}
 
   .bucket-tabs{
     display:flex;
@@ -6571,6 +6593,7 @@ loadRoster();
   <div class="page-nav">
     <button class="page-nav-btn active" id="navOwedBtn">Who Do We Owe</button>
     <button class="page-nav-btn" id="navPaymentsBtn">Payments Raised</button>
+    <button class="page-nav-btn" id="navHoldBtn">Not Paying <span id="navHoldCount"></span></button>
   </div>
 
   <div id="page-owed">
@@ -6637,6 +6660,7 @@ loadRoster();
     <div class="controls" id="createPaymentBar" style="display:none;">
       <span id="createPaymentInfo" style="font-size:13px;color:var(--muted);font-weight:600;"></span>
       <div class="print-btn" id="createPaymentBtn">Create Payment</div>
+      <div class="print-btn" id="moveToHoldBtn">Move to Not Paying</div>
       <div class="print-btn" id="clearBillSelectionBtn">Clear selection</div>
     </div>
 
@@ -6743,6 +6767,65 @@ loadRoster();
 
   </div><!-- /page-payments -->
 
+  <div id="page-hold" style="display:none;">
+
+    <div class="summary-grid">
+      <div class="summary-card">
+        <div class="label">Not Being Paid</div>
+        <div class="value" id="holdSumTotal">£0.00</div>
+      </div>
+      <div class="summary-card overdue">
+        <div class="label">Of Which Overdue</div>
+        <div class="value" id="holdSumOverdue">£0.00</div>
+      </div>
+      <div class="summary-card">
+        <div class="label">Suppliers</div>
+        <div class="value" id="holdSumSuppliers">0</div>
+      </div>
+      <div class="summary-card">
+        <div class="label">Invoices</div>
+        <div class="value" id="holdSumInvoices">0</div>
+      </div>
+    </div>
+
+    <div id="holdLoadError" style="display:none;background:var(--bad-bg);color:var(--bad);border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:13px;"></div>
+
+    <div class="controls">
+      <input type="text" id="holdSearchBox" placeholder="Search supplier...">
+      <select id="holdSortSelect">
+        <option value="total_desc">Sort: Amount (high–low)</option>
+        <option value="oldest_due">Sort: Oldest due date first</option>
+        <option value="name_asc">Sort: Supplier name (A–Z)</option>
+      </select>
+      <div class="print-btn" id="holdRefreshBtn">↻ Refresh</div>
+    </div>
+
+    <div class="controls" id="holdBulkBar" style="display:none;">
+      <span id="holdSelectedInfo" style="font-size:13px;color:var(--muted);font-weight:600;"></span>
+      <div class="print-btn" id="holdRaiseBtn">Raise Payment</div>
+      <div class="print-btn" id="holdReturnBtn">Return to Who Do We Owe</div>
+      <div class="print-btn" id="holdClearBtn">Clear selection</div>
+    </div>
+
+    <table>
+      <thead>
+        <tr>
+          <th style="width:40%;">Supplier</th>
+          <th>Total</th>
+          <th>Invoices</th>
+          <th>Oldest Due Date</th>
+        </tr>
+      </thead>
+      <tbody id="holdTableBody"></tbody>
+    </table>
+
+    <div class="empty-state" id="holdNoResults" style="display:none;">
+      <h3>Nothing parked here</h3>
+      <div>In "Who Do We Owe", tick the invoices the Directors don't want paid yet and click "Move to Not Paying".</div>
+    </div>
+
+  </div><!-- /page-hold -->
+
 </main>
 
 <footer>Who Do We Owe — Sunshine Windows / Tameside Trade Plastics / Mallard &amp; McKellar</footer>
@@ -6761,6 +6844,10 @@ let raisedPayments = []; // [{id, date(createdAt), paidAt, status, items:[{id, c
 let raisedItemsIndex = new Map(); // billKey -> {paymentId, status} - which Bills-Owed invoices already have a payment raised
 let selectedPayments = new Set(); // payment ids selected for bulk mark paid/unpaid in Payments Raised
 let expandedPayments = new Set(); // payment ids currently expanded in Payments Raised
+let holdItems = [];            // [{id, company, invoiceNumber, reference, dueDate, amount, createdAt}] - invoices parked as "Not Paying" (Supabase: wdwo_not_paying)
+let holdIndex = new Map();     // billKey -> holdItem
+let selectedHold = new Set();  // hold item ids selected in the Not Paying tab
+let expandedHold = new Set();  // supplier names expanded in the Not Paying tab
 
 // Canonical key used to match an invoice in Who Do We Owe to a payment_item
 // raised against it in Supabase - same function used on both sides so the
@@ -6843,7 +6930,7 @@ function toDateInputValue(dt){
 // they've already been actioned, so they drop out of Overdue/Due-soon views
 // (they still show in Full Breakdown with a "Payment Raised" badge).
 function bucketOf(inv, today){
-  if(inv.raised) return 'other';
+  if(inv.raised || inv.notPaying) return 'other';
   if(!inv.dueDate || inv.amountDue <= 0) return 'other';
   const days = Math.round((inv.dueDate.getTime() - today.getTime()) / 86400000);
   if(days < 0) return 'overdue';
@@ -6883,7 +6970,7 @@ function getSuppliersForDateRange(fromDate, toDate){
   const list = [];
   supplierData.forEach(s => {
     const invoices = s.invoices.filter(inv => {
-      if(inv.raised) return false;
+      if(inv.raised || inv.notPaying) return false;
       if(!inv.dueDate || inv.amountDue <= 0) return false;
       return inv.dueDate >= fromDate && inv.dueDate <= toDate;
     });
@@ -6928,6 +7015,7 @@ function processRows(rows){
     const total = parseAmount(r.Total);
     const isOverdue = !!(dueDate && dueDate < today && amountDue > 0);
     const raisedInfo = raisedItemsIndex.get(billKey(supplierName, r.InvoiceNumber || r.Reference)) || null;
+    const holdInfo = holdIndex.get(billKey(supplierName, r.InvoiceNumber || r.Reference)) || null;
 
     if(!suppliers.has(supplierName)){
       suppliers.set(supplierName, {
@@ -6941,7 +7029,7 @@ function processRows(rows){
     const s = suppliers.get(supplierName);
     // A raised payment means this invoice has already been actioned - leave it
     // out of the owed/overdue totals (it still shows in the list with a badge).
-    if(!raisedInfo){
+    if(!raisedInfo && !holdInfo){
       s.totalOwed += amountDue;
       if(isOverdue) s.overdueAmount += amountDue;
       if(dueDate && amountDue !== 0){
@@ -6958,7 +7046,8 @@ function processRows(rows){
       total: total,
       amountDue: amountDue,
       overdue: isOverdue,
-      raised: raisedInfo
+      raised: raisedInfo,
+      notPaying: holdInfo
     });
   });
 
@@ -6983,7 +7072,8 @@ function reapplyRaisedStatus(){
     s.oldestDue = null;
     s.invoices.forEach(inv => {
       inv.raised = raisedItemsIndex.get(billKey(inv.company, inv.invoiceNumber || inv.reference)) || null;
-      if(!inv.raised){
+      inv.notPaying = holdIndex.get(billKey(inv.company, inv.invoiceNumber || inv.reference)) || null;
+      if(!inv.raised && !inv.notPaying){
         s.totalOwed += inv.amountDue;
         if(inv.overdue) s.overdueAmount += inv.amountDue;
         if(inv.dueDate && inv.amountDue !== 0){
@@ -7120,16 +7210,17 @@ function render(){
 
       const isPrinting = document.body.classList.contains('is-printing');
       const invoicesForDisplay = (isPrinting && currentBucketTab === 'full' && overdueOnly())
-        ? s.invoices.filter(inv => inv.overdue && !inv.raised)
+        ? s.invoices.filter(inv => inv.overdue && !inv.raised && !inv.notPaying)
         : s.invoices;
 
       let rows = invoicesForDisplay.map(inv => {
         const key = billKey(inv.company, inv.invoiceNumber || inv.reference);
-        const checkboxCell = inv.raised
+        const checkboxCell = (inv.raised || inv.notPaying)
           ? ''
           : `<input type="checkbox" class="bill-select-checkbox" data-key="${escapeAttr(key)}">`;
         const statusCell = inv.raised
           ? `<span class="badge ${inv.raised.status === 'paid' ? 'ok' : 'duesoon'}">${inv.raised.status === 'paid' ? 'Payment Raised • Paid' : 'Payment Raised'}</span>`
+          : inv.notPaying ? '<span class="badge hold">Not Paying</span>'
           : (inv.overdue ? '<span class="badge overdue">Overdue</span>' : (inv.dueDate ? '<span class="badge ok">OK</span>' : '<span class="badge none">—</span>'));
         return `
         <tr>
@@ -7343,6 +7434,269 @@ document.getElementById('createPaymentBtn').addEventListener('click', async () =
   }
 });
 
+
+/* ---------- Not Paying tab (Supabase-backed: table wdwo_not_paying) ---------- */
+// Invoices the Directors don't want paid yet are parked here. They're saved to
+// the shared database, so they're remembered the next time a Bills report is
+// loaded - the invoice is matched back up by supplier + invoice number.
+
+async function refreshHold(){
+  try{
+    const { data, error } = await sb
+      .from('wdwo_not_paying')
+      .select('id, created_at, company, invoice_number, reference, due_date, amount')
+      .order('created_at', { ascending: true });
+    if(error) throw error;
+    holdItems = (data || []).map(r => ({
+      id: r.id,
+      createdAt: r.created_at ? new Date(r.created_at) : null,
+      company: r.company,
+      invoiceNumber: r.invoice_number || '',
+      reference: r.reference || '',
+      dueDate: r.due_date ? parseISODate(r.due_date) : null,
+      amount: Number(r.amount)
+    }));
+    holdIndex = new Map();
+    holdItems.forEach(it => holdIndex.set(billKey(it.company, it.invoiceNumber || it.reference), it));
+    document.getElementById('holdLoadError').style.display = 'none';
+    return true;
+  } catch(err){
+    console.error('Could not load Not Paying list from Supabase', err);
+    const msg = 'Could not load the Not Paying list — ' + (err && err.message ? err.message : 'unknown error') + '. Check the wdwo_not_paying table exists in Supabase (see the How To guide) and try Refresh.';
+    const banner = document.getElementById('holdLoadError');
+    banner.textContent = msg;
+    banner.style.display = 'block';
+    return false;
+  }
+}
+
+function holdOverdue(it, today){
+  return !!(it.dueDate && it.dueDate < today && it.amount > 0);
+}
+
+function getHoldSuppliers(){
+  const map = new Map();
+  holdItems.forEach(it => {
+    if(!map.has(it.company)) map.set(it.company, { name: it.company, total: 0, items: [], oldestDue: null });
+    const s = map.get(it.company);
+    s.total += it.amount;
+    s.items.push(it);
+    if(it.dueDate && (!s.oldestDue || it.dueDate < s.oldestDue)) s.oldestDue = it.dueDate;
+  });
+  let list = Array.from(map.values());
+  const term = document.getElementById('holdSearchBox').value.trim().toLowerCase();
+  if(term) list = list.filter(s => s.name.toLowerCase().includes(term));
+  const sort = document.getElementById('holdSortSelect').value;
+  if(sort === 'name_asc') list.sort((a,b) => a.name.localeCompare(b.name));
+  else if(sort === 'oldest_due') list.sort((a,b) => (a.oldestDue ? a.oldestDue.getTime() : Infinity) - (b.oldestDue ? b.oldestDue.getTime() : Infinity));
+  else list.sort((a,b) => b.total - a.total);
+  list.forEach(s => s.items.sort((a,b) => (a.dueDate ? a.dueDate.getTime() : Infinity) - (b.dueDate ? b.dueDate.getTime() : Infinity)));
+  return list;
+}
+
+function updateHoldNavCount(){
+  document.getElementById('navHoldCount').textContent = holdItems.length ? '(' + holdItems.length + ')' : '';
+}
+
+function renderHold(){
+  updateHoldNavCount();
+  const today = todayUTC();
+  const total = holdItems.reduce((sum,it) => sum + it.amount, 0);
+  const overdue = holdItems.filter(it => holdOverdue(it, today)).reduce((sum,it) => sum + it.amount, 0);
+  document.getElementById('holdSumTotal').textContent = fmtMoney(total);
+  document.getElementById('holdSumOverdue').textContent = fmtMoney(overdue);
+  document.getElementById('holdSumSuppliers').textContent = new Set(holdItems.map(it => it.company)).size;
+  document.getElementById('holdSumInvoices').textContent = holdItems.length;
+
+  // Drop selections that no longer exist
+  const liveIds = new Set(holdItems.map(it => it.id));
+  Array.from(selectedHold).forEach(id => { if(!liveIds.has(id)) selectedHold.delete(id); });
+
+  const bar = document.getElementById('holdBulkBar');
+  if(selectedHold.size){
+    const sel = holdItems.filter(it => selectedHold.has(it.id));
+    bar.style.display = 'flex';
+    document.getElementById('holdSelectedInfo').textContent =
+      sel.length + ' invoice' + (sel.length===1?'':'s') + ' selected  •  ' + fmtMoney(sel.reduce((sum,it) => sum + it.amount, 0));
+  } else {
+    bar.style.display = 'none';
+  }
+
+  // Which parked invoices are in the report currently loaded (if any)?
+  const reportLoaded = supplierData.length > 0;
+  const inReport = new Set();
+  supplierData.forEach(s => s.invoices.forEach(inv => inReport.add(billKey(inv.company, inv.invoiceNumber || inv.reference))));
+
+  const list = getHoldSuppliers();
+  const tbody = document.getElementById('holdTableBody');
+  tbody.innerHTML = '';
+  document.getElementById('holdNoResults').style.display = list.length ? 'none' : 'block';
+
+  list.forEach(s => {
+    const isOpen = expandedHold.has(s.name);
+    const allSelected = s.items.every(it => selectedHold.has(it.id));
+    const row = document.createElement('tr');
+    row.className = 'supplier-row';
+    row.innerHTML = `
+      <td><input type="checkbox" class="hold-supplier-cb" title="Select all this supplier's invoices" ${allSelected ? 'checked' : ''} style="margin-right:8px;"><span class="chev ${isOpen?'open':''}">▶</span>${escapeHTML(s.name)}</td>
+      <td class="amount ${s.total<0?'negative':''}">${fmtMoney(s.total)}</td>
+      <td>${s.items.length}</td>
+      <td>${fmtDate(s.oldestDue)}</td>
+    `;
+    row.querySelector('.hold-supplier-cb').addEventListener('click', (e) => e.stopPropagation());
+    row.querySelector('.hold-supplier-cb').addEventListener('change', (e) => {
+      s.items.forEach(it => { if(e.target.checked) selectedHold.add(it.id); else selectedHold.delete(it.id); });
+      renderHold();
+    });
+    row.addEventListener('click', () => {
+      if(expandedHold.has(s.name)) expandedHold.delete(s.name); else expandedHold.add(s.name);
+      renderHold();
+    });
+    tbody.appendChild(row);
+
+    if(isOpen){
+      const detailRow = document.createElement('tr');
+      detailRow.className = 'detail-row';
+      const td = document.createElement('td');
+      td.colSpan = 4;
+      const rows = s.items.map(it => {
+        const key = billKey(it.company, it.invoiceNumber || it.reference);
+        let status = holdOverdue(it, today) ? '<span class="badge overdue">Overdue</span>' : '<span class="badge hold">Not Paying</span>';
+        if(reportLoaded && !inReport.has(key)) status += ' <span class="badge none" title="This invoice is not in the Bills report currently loaded - it may have been paid or removed in Xero">Not in loaded report</span>';
+        return `
+        <tr>
+          <td style="width:30px;"><input type="checkbox" class="hold-item-cb" data-id="${escapeAttr(it.id)}" ${selectedHold.has(it.id) ? 'checked' : ''}></td>
+          <td>${escapeHTML(it.invoiceNumber || '—')}</td>
+          <td>${escapeHTML(it.reference || '—')}</td>
+          <td>${fmtDate(it.dueDate)}</td>
+          <td>${fmtDate(it.createdAt)}</td>
+          <td class="amount ${it.amount<0?'negative':''}">${fmtMoney(it.amount)}</td>
+          <td>${status}</td>
+        </tr>`;
+      }).join('');
+      td.innerHTML = `
+        <div class="detail-wrap">
+          <table class="detail-table">
+            <thead><tr><th style="width:30px;"></th><th>Invoice</th><th>Reference</th><th>Due Date</th><th>Parked On</th><th>Amount</th><th></th></tr></thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </div>`;
+      td.querySelectorAll('.hold-item-cb').forEach(cb => {
+        cb.addEventListener('click', (e) => e.stopPropagation());
+        cb.addEventListener('change', (e) => {
+          const id = s.items.find(x => String(x.id) === cb.dataset.id).id;
+          if(e.target.checked) selectedHold.add(id); else selectedHold.delete(id);
+          renderHold();
+        });
+      });
+      detailRow.appendChild(td);
+      tbody.appendChild(detailRow);
+    }
+  });
+}
+
+function escapeHTML(s){
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+async function afterHoldChange(){
+  await refreshRaisedPayments();   // also refreshes the Not Paying list
+  reapplyRaisedStatus();
+  render();
+  renderPayments();
+  renderHold();
+}
+
+// Who Do We Owe -> Not Paying
+document.getElementById('moveToHoldBtn').addEventListener('click', async () => {
+  if(!selectedBills.size) return;
+  const items = Array.from(selectedBills.values());
+  const total = items.reduce((sum,b) => sum + b.amount, 0);
+  const btn = document.getElementById('moveToHoldBtn');
+  const originalText = btn.textContent;
+  btn.textContent = 'Moving…';
+  document.getElementById('billsLoadError').style.display = 'none';
+  try{
+    const rows = items.map(it => ({
+      company: it.company,
+      invoice_number: it.invoiceNumber || null,
+      reference: it.reference || null,
+      due_date: it.dueDate ? toDateInputValue(it.dueDate) : null,
+      amount: it.amount
+    }));
+    const { error } = await sb.from('wdwo_not_paying').insert(rows);
+    if(error) throw error;
+    selectedBills.clear();
+    await afterHoldChange();
+    alert(items.length + ' invoice' + (items.length===1?'':'s') + ' (' + fmtMoney(total) + ') moved to Not Paying. They are saved and will be remembered next time you load a report.');
+  } catch(err){
+    console.error(err);
+    const banner = document.getElementById('billsLoadError');
+    banner.textContent = 'Could not move those invoices to Not Paying — ' + (err && err.message ? err.message : 'unknown error') + '. Nothing was changed.';
+    banner.style.display = 'block';
+  } finally {
+    btn.textContent = originalText;
+  }
+});
+
+// Not Paying -> back to Who Do We Owe
+document.getElementById('holdReturnBtn').addEventListener('click', async () => {
+  const ids = Array.from(selectedHold);
+  if(!ids.length) return;
+  if(!confirm('Return ' + ids.length + ' invoice' + (ids.length===1?'':'s') + ' to Who Do We Owe as outstanding?')) return;
+  try{
+    const { error } = await sb.from('wdwo_not_paying').delete().in('id', ids);
+    if(error) throw error;
+    selectedHold.clear();
+    await afterHoldChange();
+  } catch(err){
+    alert('Could not return those invoices — ' + (err && err.message ? err.message : 'unknown error') + '. Nothing was changed.');
+  }
+});
+
+// Not Paying -> raise a payment (same as Create Payment in Who Do We Owe)
+document.getElementById('holdRaiseBtn').addEventListener('click', async () => {
+  const sel = holdItems.filter(it => selectedHold.has(it.id));
+  if(!sel.length) return;
+  const total = sel.reduce((sum,it) => sum + it.amount, 0);
+  if(!confirm('Raise one payment for ' + sel.length + ' invoice' + (sel.length===1?'':'s') + ', total ' + fmtMoney(total) + '? They will leave Not Paying and appear in Payments Raised.')) return;
+  const btn = document.getElementById('holdRaiseBtn');
+  const originalText = btn.textContent;
+  btn.textContent = 'Raising…';
+  let paymentId = null;
+  try{
+    const { data: paymentRow, error: payErr } = await sb.from('wdwo_payments').insert({ status: 'unpaid' }).select().single();
+    if(payErr) throw payErr;
+    paymentId = paymentRow.id;
+    const itemRows = sel.map(it => ({
+      payment_id: paymentId,
+      company: it.company,
+      invoice_number: it.invoiceNumber || null,
+      reference: it.reference || null,
+      due_date: it.dueDate ? toDateInputValue(it.dueDate) : null,
+      amount: it.amount
+    }));
+    const { error: itemsErr } = await sb.from('wdwo_payment_items').insert(itemRows);
+    if(itemsErr) throw itemsErr;
+    const { error: delErr } = await sb.from('wdwo_not_paying').delete().in('id', sel.map(it => it.id));
+    if(delErr) throw delErr;
+    selectedHold.clear();
+    await afterHoldChange();
+    alert('Payment raised for ' + sel.length + ' invoice' + (sel.length===1?'':'s') + ', total ' + fmtMoney(total) + '. It now shows in Payments Raised.');
+  } catch(err){
+    console.error(err);
+    alert('Could not raise that payment — ' + (err && err.message ? err.message : 'unknown error') + '. Check Payments Raised and Not Paying before trying again.');
+    await afterHoldChange();
+  } finally {
+    btn.textContent = originalText;
+  }
+});
+
+document.getElementById('holdClearBtn').addEventListener('click', () => { selectedHold.clear(); renderHold(); });
+document.getElementById('holdSearchBox').addEventListener('input', renderHold);
+document.getElementById('holdSortSelect').addEventListener('change', renderHold);
+document.getElementById('holdRefreshBtn').addEventListener('click', afterHoldChange);
+
 /* ---------- Payments Raised tab (Supabase-backed) ---------- */
 
 function paymentAmount(p){
@@ -7361,6 +7715,7 @@ function paymentEffectiveDate(p){
 // raisedItemsIndex, which Who Do We Owe uses to badge/exclude invoices that
 // already have a payment against them.
 async function refreshRaisedPayments(){
+  await refreshHold();
   try{
     const { data, error } = await sb
       .from('wdwo_payments')
@@ -7481,6 +7836,7 @@ function renderPaymentsBulkBar(list){
 }
 
 function renderPayments(){
+  updateHoldNavCount();
   renderPaymentsSummary();
 
   const list = getFilteredSortedPayments();
@@ -7800,21 +8156,27 @@ document.getElementById('clearSelectionBtn').addEventListener('click', () => {
 
 /* ---------- Page-level tab switching ---------- */
 
-document.getElementById('navOwedBtn').addEventListener('click', () => {
-  document.getElementById('navOwedBtn').classList.add('active');
-  document.getElementById('navPaymentsBtn').classList.remove('active');
-  document.getElementById('page-owed').style.display = 'block';
-  document.getElementById('page-payments').style.display = 'none';
-});
+function showPage(which){
+  const pages = { owed:['navOwedBtn','page-owed'], payments:['navPaymentsBtn','page-payments'], hold:['navHoldBtn','page-hold'] };
+  Object.keys(pages).forEach(k => {
+    document.getElementById(pages[k][0]).classList.toggle('active', k === which);
+    document.getElementById(pages[k][1]).style.display = (k === which) ? 'block' : 'none';
+  });
+}
+document.getElementById('navOwedBtn').addEventListener('click', () => showPage('owed'));
 document.getElementById('navPaymentsBtn').addEventListener('click', async () => {
-  document.getElementById('navPaymentsBtn').classList.add('active');
-  document.getElementById('navOwedBtn').classList.remove('active');
-  document.getElementById('page-payments').style.display = 'block';
-  document.getElementById('page-owed').style.display = 'none';
+  showPage('payments');
   await refreshRaisedPayments();
   reapplyRaisedStatus();
   render();
   renderPayments();
+});
+document.getElementById('navHoldBtn').addEventListener('click', async () => {
+  showPage('hold');
+  await refreshRaisedPayments();
+  reapplyRaisedStatus();
+  render();
+  renderHold();
 });
 
 /* ---------- Initial load ---------- */
@@ -7826,6 +8188,7 @@ document.getElementById('navPaymentsBtn').addEventListener('click', async () => 
   await refreshRaisedPayments();
   setDefaultPaymentsDateRange();
   renderPayments();
+  renderHold();
 })();
 <\/script>
 
@@ -13437,7 +13800,138 @@ loadSubs();
 
 
 <script type="text/plain" id="guide-pettycash">JVBERi0xLjQKJZOMi54gUmVwb3J0TGFiIEdlbmVyYXRlZCBQREYgZG9jdW1lbnQgKG9wZW5zb3VyY2UpCjEgMCBvYmoKPDwKL0YxIDIgMCBSIC9GMiAzIDAgUiAvRjMgNSAwIFIKPj4KZW5kb2JqCjIgMCBvYmoKPDwKL0Jhc2VGb250IC9IZWx2ZXRpY2EgL0VuY29kaW5nIC9XaW5BbnNpRW5jb2RpbmcgL05hbWUgL0YxIC9TdWJ0eXBlIC9UeXBlMSAvVHlwZSAvRm9udAo+PgplbmRvYmoKMyAwIG9iago8PAovQmFzZUZvbnQgL0hlbHZldGljYS1Cb2xkIC9FbmNvZGluZyAvV2luQW5zaUVuY29kaW5nIC9OYW1lIC9GMiAvU3VidHlwZSAvVHlwZTEgL1R5cGUgL0ZvbnQKPj4KZW5kb2JqCjQgMCBvYmoKPDwKL0NvbnRlbnRzIDEwIDAgUiAvTWVkaWFCb3ggWyAwIDAgNTk1LjI3NTYgODQxLjg4OTggXSAvUGFyZW50IDkgMCBSIC9SZXNvdXJjZXMgPDwKL0ZvbnQgMSAwIFIgL1Byb2NTZXQgWyAvUERGIC9UZXh0IC9JbWFnZUIgL0ltYWdlQyAvSW1hZ2VJIF0KPj4gL1JvdGF0ZSAwIC9UcmFucyA8PAoKPj4gCiAgL1R5cGUgL1BhZ2UKPj4KZW5kb2JqCjUgMCBvYmoKPDwKL0Jhc2VGb250IC9IZWx2ZXRpY2EtT2JsaXF1ZSAvRW5jb2RpbmcgL1dpbkFuc2lFbmNvZGluZyAvTmFtZSAvRjMgL1N1YnR5cGUgL1R5cGUxIC9UeXBlIC9Gb250Cj4+CmVuZG9iago2IDAgb2JqCjw8Ci9Db250ZW50cyAxMSAwIFIgL01lZGlhQm94IFsgMCAwIDU5NS4yNzU2IDg0MS44ODk4IF0gL1BhcmVudCA5IDAgUiAvUmVzb3VyY2VzIDw8Ci9Gb250IDEgMCBSIC9Qcm9jU2V0IFsgL1BERiAvVGV4dCAvSW1hZ2VCIC9JbWFnZUMgL0ltYWdlSSBdCj4+IC9Sb3RhdGUgMCAvVHJhbnMgPDwKCj4+IAogIC9UeXBlIC9QYWdlCj4+CmVuZG9iago3IDAgb2JqCjw8Ci9QYWdlTW9kZSAvVXNlTm9uZSAvUGFnZXMgOSAwIFIgL1R5cGUgL0NhdGFsb2cKPj4KZW5kb2JqCjggMCBvYmoKPDwKL0F1dGhvciAoQ2xpZW50IFRvb2xzKSAvQ3JlYXRpb25EYXRlIChEOjIwMjYwODA2MTEwMzM1KzAwJzAwJykgL0NyZWF0b3IgKFwodW5zcGVjaWZpZWRcKSkgL0tleXdvcmRzICgpIC9Nb2REYXRlIChEOjIwMjYwODA2MTEwMzM1KzAwJzAwJykgL1Byb2R1Y2VyIChSZXBvcnRMYWIgUERGIExpYnJhcnkgLSBcKG9wZW5zb3VyY2VcKSkgCiAgL1N1YmplY3QgKFwodW5zcGVjaWZpZWRcKSkgL1RpdGxlIChQZXR0eSBDYXNoIFRyYWNrZXIgXDIwNCBIb3cgVG8pIC9UcmFwcGVkIC9GYWxzZQo+PgplbmRvYmoKOSAwIG9iago8PAovQ291bnQgMiAvS2lkcyBbIDQgMCBSIDYgMCBSIF0gL1R5cGUgL1BhZ2VzCj4+CmVuZG9iagoxMCAwIG9iago8PAovRmlsdGVyIFsgL0FTQ0lJODVEZWNvZGUgL0ZsYXRlRGVjb2RlIF0gL0xlbmd0aCAyNDAwCj4+CnN0cmVhbQpHYXUwRTlsbyZJJkFAc0JtLFV0bipDVjxTOkpYY2NtQS0uaUMsXTFeKmRpTjBMaCcwXCRpakpeXltFZD84XnBmajlCZ11AUTcqIkhtKFY8TUczc3A7NUpJKDpqb0UvV2lTb0ojSUs4Q1dwcTlFNWBqXW5DNTVUP149Ij1OTjozUjZQMEg6S19yb04mTl5QOEEoSS4pKzpvcTpAPnFZMUV0Tl5jPUQlazljXC9jRE4yRzxVdCwxX0c4cVszYnIxZCg2Z2VGUyJaNGBjbFg5JitDRD02aG9eMClucSNlP1UlaVJdUzVtIikjbTRrcF47UnBTPkdCakYtYzdiL0grOiptXlkmblw3LkxNWiF1Wio9LGxuWVFjSWJJIzBvRURnTjJla3A+Okt0N0BcP29WJUVELzEpWV83NjpgSTJBUFM6YSFLWEBlZTQvUyo2LERcRChJZ1gnIlhZRUFsaWxiSD1PTHFlKUkwRVNSbmVPTCdPNT1TKE8nV1kxLyo0NFIkS2pdSStuajJBPnQrZDJgJl9fTjV0WzljXEdFXixTXzw1Vic7J1klQzpePCVZRjsuN2lmK1ksTjkjL2F1L1F0JmpEKSgna2g+cmEhPTlDRUMtOWAvcWxtTm9NUnJ1Il1yb2U/cjNlJChjSzQyOlhVY3IsQ3BgTW45P2BtMzB0cXEvPF81L2BlPicpaUNcOV5LLzteNSZZKVVHI25GXktMQmgtQy1Ec25yRClVOVVSR1g/OlQpSHNzJk0tJUpyZ0pQa3JoRWtKcnVeUEdvT24+XldZTlxNM3JtX2BPXSQ4KShAQlo+MmQ1NmVfNWg0LD8hOGpSRDNjOl1WYyRBZzEkWFhPNEZRP2gpdDs3NyIuS0g6L1pCbyI/dGkkVCV1PVMzUktKMGgjNnI2LFVVTiUnNTdoX1sqc0QtP0VTQDtGalFfPkdpdTk9MSgrLDt1QWEkJ0FBcm07L2MqKXJoOm8zbGxbWENEJllbIUxSISJcYVhfXXE9b29yTyhfJTUrWSJwcCRsVV4lNDpWKFxFOltOK109XGdqTCkpZnQyLTJtUmxVRidEIWcuWG8qYy4uWykoLTwkcl9rPDJeQDpScnNUPClFcCZpQiUrXTk8aSxcKWk8UEczZEchQWxsUy5RO0UhSWtFKVBaamFOTW5QYGAlWGM/TzgrcylSQlwuK0hQXys2JTZWS1xjbEwzXzFsWS1aVTo6Um87JmlIbFdjLEh1Y1ZaYTIzJnEqR14kXyI6bi05XjVdZD1URyR1RV9wKyJebD5sMUc3b2Y+P0dxZ0QtQ1U7NyxUWSVaRF8xbTAyL2U6UWElcjMrU0NoV1hbcTQvVC9xbT5ARV9bVFpocUxaU3BtTyNQZ1NYUiMmO3I1LkIySUhYOGhjMlFaNjZZVkNVZF1bMkg5XiNaJHJuNkRqP2ApLydKLF07SyNCbFdHdGBOPGBbQkE/ZixXaW5KaWlcT00vWDhEQVRcI2pcOjEuYDpUWTxsMUlxRGVsczYvSGg2P3FLWF42NnAsQ1VhLyEmOjJQUzY7Wl4pKDRZMUVUKS8zNChtLEhtYyhwVVlSIis4NiFXPTdJUC5bZTMpX3IjRWFBL0ZnPHEnOlQmQ1w7K1ZUUWNWT2hwI2I/Nz4wc1M/JD5QMlF1UGtRMF4rMmRSQXQpZC0uPU43U0phWDcsNiJqP1k7aVM+Zic8TjhlYD0wQSJiQW5GSDJqOU1lPi1bN1dlU2E/PmUnPilmOVohci9ga0giYTZpPTk+cW5jKnJeV0ErKnJROz1XUzZpUStUZ0E6XWkianJBVlJYbGZbMCZrOl82XzlkQ3RfdUs9S3RcMjguSmkuKGJoZTcqVmc1LEQnO2BmL0J0UEtPXS10YzIhNi8kRVNJLFc9RzM1TTg+X0RcaUdaKGJAQDphKiRkWjNxayZjLiNPW3VSZzlFQ01OLj9vNmleJFssUj9YXlRvZi82ZS5OYC05VDRDVlgmX19wcVVpcDwjO04zaDlaYGFTUmxJWjQnXE5BSHUkKjxARGxPSlpRPGJZVk4wXV1sNW5gUS5fV25xU09rPmhhUm04LUlzcGQxITBsRD5VPTk/Mz5oLUk0R2xBZjgjXkNtZDlLKTUzWyNDYj4ySycpUSRqZzVgLE0mTjlkaiokdEI1JmdOO1dPWV1aOjBnP2RBQ1lJb11MQTl1RD4nRVFtYm5AJTRnUjpvWVdaNV1ITG90cXE7RTUkTWlKPFBxLUN1akUtNSZSRCMsbXNvV1NcVFQmQitrRldSOys2KUhVWVYjMEUxV2FrUzRTUnBJY08iXUIvPUFrXT4sPCIxNDkvYCk9RzwyW04rMktHQmJcMm5odCUib3MjRiJAOCYoKUlgY0tKY1QlayprNj9OKHRtPjokYmo6SW9rNXNXQihsQEtDNyZfZF5QQ21ETDhAUGxJMVlwSV5UN2pOXStcQzYkWiopTV4jJjQ9XzxkVVZldWZAPip0UWVGbmt1NiIuIkhbMyxEVEdbPDE3SUtEcF0yWlxfdVEjIzduciwlSSwrKT41P3BwYlBGQlJvL3BJKVA0aHQyMlEvYENrbCpicGBzMCdbPVtmNSFTXyZoK0U4VyJSQXEpVjtoNnFhUm4vL2huLFBRVXJyNVZURlRYI2MocVcoXTpaRmEqVD0tPmgtSz4lJF9jRWdIUmxANjxocGc1aldNWWg4Qj5NYS44M3NlVDtiXCpHMDhHN11oSWZldDxGVmFxMjpqailpb2xHYGViQkEtRlQsdEI0RClfLV4tQ3JwOCQ9S2RHTFdYVDEwaDUucWNbZGlvViclLEZuNVAiJiVybG5TMS5dOUBBL3E0OjdZUjVmODoyUCVYQXEtcUUhVFVMSCw3cU5kNVBMKCtnUm44Z0JRRVZrQkxpZFFLPjhSZVhMNGk4aDMqbVYqViUybUItJltfW1UoJmp1XE1UUWM7Q15QcnVVSFxVJEpQcm0jJ0BCIXBITCE+I21pdSU8bXFIJjpnXEJWIzQ+cT9CPzZLT28xKFhgO0llJzFeWF9nWjtVQEZSTnFnSihASTJmUSgzKyJXR1JONnRiTFhITHVDKkY1bjpfdE9lVz5mW2Q3XCEnVGVdW1dmaCoydXFxQU9MQGBQLTwtLz10R09aVWwrPisrViksaz9KMEZDUDAodFdSW2xTLSs2LyFlXE1bLT9icXQkWUlmVTRMOV9Tfj5lbmRzdHJlYW0KZW5kb2JqCjExIDAgb2JqCjw8Ci9GaWx0ZXIgWyAvQVNDSUk4NURlY29kZSAvRmxhdGVEZWNvZGUgXSAvTGVuZ3RoIDYzMgo+PgpzdHJlYW0KR2F1MSo0YEIoLyY7R0UvTUtgZ2slXVpMSFVLXENFYilkYDRdNEBWM1pkIjRLJ3AzN2pKKUAkZiJFcmgiN2FYTyZWNSpJOmNiMSRbbktaJl1ETGpHVTUkXEpOKHRBcztORGBhLT1CKEwpTTpkMTtBWCk3cU4kP1JsMSFmIyYyWWdZLkNsSVcxXypQXzdAXXBRckhWa0ohOmpraywwdD8nXVBVUFMkLHAiRnJSKkVmV01GYU5cSis6LSVqITh1ODRxNmJzRyVTQDA2OFIoYGtwO1JIbzx0UCRiLnFySj5rW201OyVJSTcoQURmUko9XGpXSFVxRHNJPi4nbkdjalc1W2JWXV5YVHBHKXA2OlJYUUVrclZdJy8+aFwjMmNucy48OWVtbXU4Pj85dHREIlFkalMlbFxVSEBWVC08NCVQIiFAbTJ0aCVdZUhwWV5YSlxoOj9qZCpNX2MrQ3NMcmFgKltOdHE6VkROQzdHZixQVUIkUylXZDVlWlA2WkJQbixca2dSOkNJcEtLYGtGYVNZWCwuNGtlJGpgRGpJVzBPQDZHc0tePGBbc0haVUhCbV1jbS08MnA7ZnQ2Zk9IPTlVRmg0THMvTThCcHNJaD1yTEc8ajA9ODpxcU5eaSxGRG1gYXArUDQlcUQ8OD1uPmxWVU5nUUsqJzRyN280N0V0R2JvVFNJclFtTyxCUU1BImE0PTlmMVtrYSkpYk5PT3Q4OVgiP2I/Y2JudGZNZTYuMF5BUzUoU3J0ZWluN29cJlNeOi9hY1prTT9RQCwrM2hfRGMkRV46bmlJOSIqZVs2YD49UWxdJTRVWDRtTXUxLyosdVdaWGQtfj5lbmRzdHJlYW0KZW5kb2JqCnhyZWYKMCAxMgowMDAwMDAwMDAwIDY1NTM1IGYgCjAwMDAwMDAwNjEgMDAwMDAgbiAKMDAwMDAwMDExMiAwMDAwMCBuIAowMDAwMDAwMjE5IDAwMDAwIG4gCjAwMDAwMDAzMzEgMDAwMDAgbiAKMDAwMDAwMDUzNSAwMDAwMCBuIAowMDAwMDAwNjUwIDAwMDAwIG4gCjAwMDAwMDA4NTQgMDAwMDAgbiAKMDAwMDAwMDkyMiAwMDAwMCBuIAowMDAwMDAxMjE4IDAwMDAwIG4gCjAwMDAwMDEyODMgMDAwMDAgbiAKMDAwMDAwMzc3NSAwMDAwMCBuIAp0cmFpbGVyCjw8Ci9JRCAKWzwzMzU4NjhjNTM4MTlhY2ZjY2RhYmNlM2Y5ZGZiNmViYj48MzM1ODY4YzUzODE5YWNmY2NkYWJjZTNmOWRmYjZlYmI+XQolIFJlcG9ydExhYiBnZW5lcmF0ZWQgUERGIGRvY3VtZW50IC0tIGRpZ2VzdCAob3BlbnNvdXJjZSkKCi9JbmZvIDggMCBSCi9Sb290IDcgMCBSCi9TaXplIDEyCj4+CnN0YXJ0eHJlZgo0NDk4CiUlRU9GCg==</script>
-<script type="text/plain" id="guide-who">JVBERi0xLjQKJZOMi54gUmVwb3J0TGFiIEdlbmVyYXRlZCBQREYgZG9jdW1lbnQgKG9wZW5zb3VyY2UpCjEgMCBvYmoKPDwKL0YxIDIgMCBSIC9GMiAzIDAgUiAvRjMgNCAwIFIgL0Y0IDUgMCBSIC9GNSA2IDAgUgo+PgplbmRvYmoKMiAwIG9iago8PAovQmFzZUZvbnQgL0hlbHZldGljYSAvRW5jb2RpbmcgL1dpbkFuc2lFbmNvZGluZyAvTmFtZSAvRjEgL1N1YnR5cGUgL1R5cGUxIC9UeXBlIC9Gb250Cj4+CmVuZG9iagozIDAgb2JqCjw8Ci9CYXNlRm9udCAvSGVsdmV0aWNhLUJvbGQgL0VuY29kaW5nIC9XaW5BbnNpRW5jb2RpbmcgL05hbWUgL0YyIC9TdWJ0eXBlIC9UeXBlMSAvVHlwZSAvRm9udAo+PgplbmRvYmoKNCAwIG9iago8PAovQmFzZUZvbnQgL1N5bWJvbCAvTmFtZSAvRjMgL1N1YnR5cGUgL1R5cGUxIC9UeXBlIC9Gb250Cj4+CmVuZG9iago1IDAgb2JqCjw8Ci9CYXNlRm9udCAvSGVsdmV0aWNhLU9ibGlxdWUgL0VuY29kaW5nIC9XaW5BbnNpRW5jb2RpbmcgL05hbWUgL0Y0IC9TdWJ0eXBlIC9UeXBlMSAvVHlwZSAvRm9udAo+PgplbmRvYmoKNiAwIG9iago8PAovQmFzZUZvbnQgL1phcGZEaW5nYmF0cyAvTmFtZSAvRjUgL1N1YnR5cGUgL1R5cGUxIC9UeXBlIC9Gb250Cj4+CmVuZG9iago3IDAgb2JqCjw8Ci9Db250ZW50cyAxMSAwIFIgL01lZGlhQm94IFsgMCAwIDU5NS4yNzU2IDg0MS44ODk4IF0gL1BhcmVudCAxMCAwIFIgL1Jlc291cmNlcyA8PAovRm9udCAxIDAgUiAvUHJvY1NldCBbIC9QREYgL1RleHQgL0ltYWdlQiAvSW1hZ2VDIC9JbWFnZUkgXQo+PiAvUm90YXRlIDAgL1RyYW5zIDw8Cgo+PiAKICAvVHlwZSAvUGFnZQo+PgplbmRvYmoKOCAwIG9iago8PAovUGFnZU1vZGUgL1VzZU5vbmUgL1BhZ2VzIDEwIDAgUiAvVHlwZSAvQ2F0YWxvZwo+PgplbmRvYmoKOSAwIG9iago8PAovQXV0aG9yIChDbGllbnQgVG9vbHMpIC9DcmVhdGlvbkRhdGUgKEQ6MjAyNjA3MjgxMjM1NDMrMDAnMDAnKSAvQ3JlYXRvciAoXCh1bnNwZWNpZmllZFwpKSAvS2V5d29yZHMgKCkgL01vZERhdGUgKEQ6MjAyNjA3MjgxMjM1NDMrMDAnMDAnKSAvUHJvZHVjZXIgKFJlcG9ydExhYiBQREYgTGlicmFyeSAtIFwob3BlbnNvdXJjZVwpKSAKICAvU3ViamVjdCAoXCh1bnNwZWNpZmllZFwpKSAvVGl0bGUgKFdobyBOZWVkcyBhIFN0YXRlbWVudCBcMjA0IEhvdyBUbykgL1RyYXBwZWQgL0ZhbHNlCj4+CmVuZG9iagoxMCAwIG9iago8PAovQ291bnQgMSAvS2lkcyBbIDcgMCBSIF0gL1R5cGUgL1BhZ2VzCj4+CmVuZG9iagoxMSAwIG9iago8PAovRmlsdGVyIFsgL0FTQ0lJODVEZWNvZGUgL0ZsYXRlRGVjb2RlIF0gL0xlbmd0aCAxODI0Cj4+CnN0cmVhbQpHYXRtPD4+czk5J1JvNEhTPlU1ZiMlUkpzSUgoc09GO1VbNERSVkVJJlttayRbQjNpaT5rWmU8T15wT0tQPidEajE4VGdSVC1KZEFHQVxeN2l0J1BQUDhyTSYlKicuZUxdY1pkJkM5b1RIai07OF87YlExRnA9KWojKiZkbyY2Xj1oQFhKVmQvX2M9MWByak0rTSZYJFZIX1M6XlRxIS1yOF5fbE1dL2IxVkpDclMuVVsvTjpYdEU1ckBpNCtZPmkhPDlfPiFyQ3ExO3U0X3JvNTdkMzRJYF8+KF0pYFtDXTtFIm5aMk8kYDFtWkxLPWduM1Q0aEg1KnRTTVBEaWpSJW8lcyRiMGUiUHNGPEJVKHRqUzs9LVB1JzNdQyIhYisxWk4tZGErTCNxYT82KHEkNmk7Jk1zcVpxaWEpO0svOCslMm87XlVrP2luSC9nOFovJDdAWGF0PW5eOj5MRTklN0tBNE9EXEJYYSxZRlhRRWQpMUxvPiI4T3RVcz0kO2A2VicyNyphV1RXTEpuWlpTIlFXb2okOTRIWSdeZik/cF8vKHNRaiEsZyY3cVxgQ09tREZcVGdUZSNjO2lZbDMiL0M1YDY9MzxfN05OMihWQFs1IispPD9IakVyUGxTcEZCNk9vZGgtMnM0I1tGaEBXUlw5MGd0SyNiN2BpKWZDREVpbzwkUjUvPTlHa2dCXiRsOWYlaUhrIW9EV1JeMmhkaDVqSy1oUVxDMDYjVyYwV0hINFAmLSJzM3MoW2drOGc7W09bcGQpNVVJVSQqVGlnYSM1Qiw3I0NXQDFtTy9NQ15sSUBAVC5TQmZGPDlHQTQ5LlFDITQ7KG0mVVw/PkUuPGopNj0hKiskJExvZWwwJzwjKSNnYj5maVhHIlk7VmM+S2JYZW1BIkBMcjtoaD5CPF4/R2lBQE1uUF5LYSxTWTI+OG4rcSk2RyhpVVItWEY5Im5zNHMxaTAsJFdNI2MxOVBraCoiTE5BbUotcVQuPXNsOiRubiZcPjUqKzdgLS1kbGE4UiQuaVUtXUBuKWBgSzMlcjY7O2EwOlw2XSthY1hUOCJsT280OlBJWyRrJ3MrcyZvQFRqP0ZvKlZccDVUcTdnJl5mR2YoXXM3aSZVZTdEVWxxOi8sLHQzMz9rJ3JmX2U8MSI8MVFIXjRBdF1TcjctT3RbZ11PKmlZPE1KN1ouQyhJNz1uOTspbUEjZy5kXkNHMlhzQz1JSV9LQldmW2ZhVEQlPmZhKlsoK1wrPE5jcmFHI0hPbyp1azctTTxuKUNKNGpsYmImKSooVys4NExkNSVNLlBmV1VqPmIwOUVLJm8lQDoiLCxPIV1qOXBqWD9vNG5xPG5uVD4xREk+NTNRIUQoPmchOkRwbG0uUWkrIzhxK21gU1E1V3EnXCEsQEwxNWo0Nk0zYEMoPTtCY25wWUNQcF1WW3EzJEloVWQ/NFleTjtsImdVMjtVZ1ctVjMmU2FMb003XkxNNWE/bjpbMzspMFZhTjohS20nRFolMDpHQTlSJT9hcDNRXjcvSiQkbFlfRldkQi1QcytrZCVbXShrS1VESzRMWWk7I09dY2lVVG4tYDpaWnA6UUVJLTNWJ01DMkY/PCM7SyInTSFsYDZwL0dfNDtmaGdCIzNeJ2o9QiJqP1taM1hKRkhANFNaZy8vYV1KdUNeb1FVIlBISHFRJ2ZYQXEuITJZQ0VJc0UpJV84VF8tIl06NFImLC5rbCtdWmhNZnMrKXFxSlhRRyNQQidgVT1DYVg4PzJZL2c2R3VHWytrQT9BJGZjKjJeaGs/Xy82VFFAWyEqNkNFc1cnc1YlM05ARjEhYW5HIzk0RSJALz00U0N1bV5pP1dhLDdSX0cvMCEpRT90NnRcb0FIVEM6R0VIS0FnbC1nYDM7M0dfa1ZdJ2RDbTtRQlU3TFVlMTNDXDUkLGhCc3AuQTxdYG9XVyhrVD5fW3QqWzM5PTc7SjpCbzFoTyN0bU9lXT84KHByRTdrajpTSiZyK1g1ZSlEQXVraihZYUJQSjE9UGE1RG5uTykndVdLXktKQWwiMVBEOT5KMnI7XD9pXE9eQ2RyI1MkVFZsSUtpZD5ESnQ+WTgiIV0kPFNSM2VVSl5iLUBwMXBtQEM0N1VvMW4oMitCVF1IJS9WY2RAcm04LFc4T15sIjQtNTZgV1FgbXVQc0UsbnQ9V1lQQGllJGNwTzk0bF5VMjdSaSRDcUYpWTRMVFNVSFdyQkZxUXJcXC9kWElQWldkcWtEbEhJRypQbzVCbCkuIWktXVdOOD03XzN1VVhOaDk4Ql1DKkVGOzpPbyhTXFdyPTsvZG9WcHFzOS8zNl08OmItQlwvby8vLzQlayJAUmBpXUZXbiNoQC44amRXTEJbYEoyLDw6PDd1XCkuWCNfZC5QJSpsPEQsPUgrLjBOT2xNfj5lbmRzdHJlYW0KZW5kb2JqCnhyZWYKMCAxMgowMDAwMDAwMDAwIDY1NTM1IGYgCjAwMDAwMDAwNjEgMDAwMDAgbiAKMDAwMDAwMDEzMiAwMDAwMCBuIAowMDAwMDAwMjM5IDAwMDAwIG4gCjAwMDAwMDAzNTEgMDAwMDAgbiAKMDAwMDAwMDQyOCAwMDAwMCBuIAowMDAwMDAwNTQzIDAwMDAwIG4gCjAwMDAwMDA2MjYgMDAwMDAgbiAKMDAwMDAwMDgzMSAwMDAwMCBuIAowMDAwMDAwOTAwIDAwMDAwIG4gCjAwMDAwMDExOTkgMDAwMDAgbiAKMDAwMDAwMTI1OSAwMDAwMCBuIAp0cmFpbGVyCjw8Ci9JRCAKWzwxZDUzOTIyNzU4ZWYxMWI1NWVjYjc5MjJiN2U1MWRjOD48MWQ1MzkyMjc1OGVmMTFiNTVlY2I3OTIyYjdlNTFkYzg+XQolIFJlcG9ydExhYiBnZW5lcmF0ZWQgUERGIGRvY3VtZW50IC0tIGRpZ2VzdCAob3BlbnNvdXJjZSkKCi9JbmZvIDkgMCBSCi9Sb290IDggMCBSCi9TaXplIDEyCj4+CnN0YXJ0eHJlZgozMTc1CiUlRU9GCg==</script>
+<script type="text/plain" id="guide-who"><!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Who Needs a Statement — How To</title>
+<style>
+  html,body{margin:0;padding:0;}
+  body{
+    font-family:"Segoe UI", -apple-system, BlinkMacSystemFont, sans-serif;
+    background:#f2f3f6;
+    color:#2b2e34;
+  }
+  .wrap{max-width:760px;margin:0 auto;padding:40px 24px 64px;}
+  header{
+    border-bottom:3px solid #1b2a52;
+    padding-bottom:16px;
+    margin-bottom:28px;
+  }
+  header h1{
+    font-size:26px;
+    margin:0 0 6px 0;
+    color:#1b2a52;
+  }
+  header p{margin:0;color:#6f7175;font-size:14px;}
+  h2{
+    font-size:16px;
+    color:#1b2a52;
+    margin:32px 0 10px 0;
+    padding-bottom:6px;
+    border-bottom:1px solid #dcdbd8;
+  }
+  p{line-height:1.6;font-size:14.5px;}
+  ol,ul{line-height:1.7;font-size:14.5px;padding-left:22px;}
+  li{margin-bottom:6px;}
+  .tag{
+    display:inline-block;
+    background:#eef2ff;
+    color:#1b2a52;
+    border:1px solid #c7cfe6;
+    border-radius:6px;
+    padding:1px 8px;
+    font-size:12.5px;
+    font-weight:700;
+    margin-right:4px;
+  }
+  .note{
+    background:#fff9e0;
+    border:1px solid #ffe58f;
+    border-radius:8px;
+    padding:12px 16px;
+    font-size:13.5px;
+    margin:16px 0;
+  }
+  .warn{
+    background:#fdecea;
+    border:1px solid #f3b8b0;
+    border-radius:8px;
+    padding:12px 16px;
+    font-size:13.5px;
+    margin:16px 0;
+  }
+  .tab-list{
+    display:flex;
+    flex-wrap:wrap;
+    gap:8px;
+    margin:10px 0 4px 0;
+  }
+  .tab-list span{
+    background:#1b2a52;
+    color:#fff;
+    border-radius:16px;
+    padding:5px 14px;
+    font-size:12.5px;
+    font-weight:700;
+  }
+  @media print{ body{background:#fff;} }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <h1>Who Needs a Statement — How To</h1>
+    <p>Builds this week's client-statement chase list from a Xero Aged Receivables export — shows who owes what, lets you print or export the list, and lets you park clients you're not sending statements to.</p>
+  </header>
+
+  <h2>1. Building the weekly list</h2>
+  <ol>
+    <li>In Xero, go to <span class="tag">Reports → Aged Receivables Detail</span>. Before exporting, add <strong>Contact Account Number</strong> as a column — this is what the tool matches clients on.</li>
+    <li>Export as Excel or CSV (most reliable), or PDF if that's all you have.</li>
+    <li>Drop the file onto the tool, or click the drop zone to choose it.</li>
+    <li>Choose who counts as needing a statement: <span class="tag">Any balance owing</span>, <span class="tag">Only overdue amounts</span> or <span class="tag">Only 1+ month overdue</span>.</li>
+    <li>Use the search box to jump straight to one company.</li>
+    <li>Results are split into tabs by account prefix (<span class="tag">T-</span> <span class="tag">S-</span> <span class="tag">SI-</span> and so on). Anything with no account number, or one that doesn't fit the pattern, goes in <span class="tag">⚠ Needs Review</span>.</li>
+    <li>Click <span class="tag">⚙ Exempt accounts</span> to hide internal or non-client codes (e.g. EBAY ONLY, DRINKS) from every tab.</li>
+    <li>Use <span class="tag">Print this tab</span> or <span class="tag">Export CSV (this tab)</span> to save or share the list you're on.</li>
+  </ol>
+
+  <div class="note">
+    <strong>Tip:</strong> Excel/CSV uploads are far more reliable than PDF. If a client is missing from the list, check their account number made it into the export.
+  </div>
+
+  <h2>2. Not Sending Statements (clients with ongoing issues)</h2>
+  <p>For clients who owe money but have an ongoing issue — a dispute, a payment plan, a solicitor involved — so they stop appearing in the list every week.</p>
+  <ol>
+    <li>On any tab (<span class="tag">T-</span>, <span class="tag">S-</span>, <span class="tag">SI-</span> or <span class="tag">⚠ Needs Review</span>) tick the box next to each client, or use the box in the header to tick everyone on the tab.</li>
+    <li>Click <span class="tag">Stop sending statements (move to Not Sending)</span>. You'll be asked for an optional note — for example <em>"Dispute — chasing separately"</em>.</li>
+    <li>Those clients move to the purple <span class="tag">⏸ Not Sending Statements</span> tab. They no longer count in <em>Clients to statement</em> or <em>Total owed</em>, and no longer show on any other tab.</li>
+    <li>On the Not Sending tab you can see what each held client currently owes in the report you've loaded. If a client isn't in the loaded report (e.g. they've paid), it shows <em>Not in report</em>.</li>
+    <li>Click a note to edit it. The tab can be printed or exported to CSV like any other, with the note included.</li>
+    <li>To start sending statements again, tick the client(s) on the Not Sending tab and click <span class="tag">Release — include in statements again</span>.</li>
+  </ol>
+
+  <div class="note">
+    <strong>It remembers.</strong> The Not Sending list is saved in the shared database, not in the report. Next week, when you load a new Aged Receivables export, held clients stay out of the list automatically. Clients are matched on account number — or on company name where there's no account number — so keep those consistent in Xero.
+  </div>
+
+  <div class="warn">
+    <strong>One-off set-up:</strong> the Not Sending tab needs a table in Supabase called <code>wns_statement_hold</code>. Run the SQL supplied with this update once in the Supabase SQL Editor. Until then the tab shows a "Could not load" message and nothing can be held.
+  </div>
+
+  <div class="note">
+    <strong>Shared and live.</strong> Because the list lives in the same database for everyone, a client held on one computer is held everywhere. Anyone using the tool can hold or release clients, so there is no undo — release a client to put them back.
+  </div>
+
+  <p style="color:#6f7175;font-size:13px;margin-top:32px;">Part of the Client Tools suite — Sunshine Windows &amp; Tameside Trade Plastics.</p>
+
+</div>
+</body>
+</html>
+</script>
 <script type="text/plain" id="guide-invoiced">JVBERi0xLjQKJZOMi54gUmVwb3J0TGFiIEdlbmVyYXRlZCBQREYgZG9jdW1lbnQgKG9wZW5zb3VyY2UpCjEgMCBvYmoKPDwKL0YxIDIgMCBSIC9GMiAzIDAgUgo+PgplbmRvYmoKMiAwIG9iago8PAovQmFzZUZvbnQgL0hlbHZldGljYSAvRW5jb2RpbmcgL1dpbkFuc2lFbmNvZGluZyAvTmFtZSAvRjEgL1N1YnR5cGUgL1R5cGUxIC9UeXBlIC9Gb250Cj4+CmVuZG9iagozIDAgb2JqCjw8Ci9CYXNlRm9udCAvSGVsdmV0aWNhLUJvbGQgL0VuY29kaW5nIC9XaW5BbnNpRW5jb2RpbmcgL05hbWUgL0YyIC9TdWJ0eXBlIC9UeXBlMSAvVHlwZSAvRm9udAo+PgplbmRvYmoKNCAwIG9iago8PAovQ29udGVudHMgOCAwIFIgL01lZGlhQm94IFsgMCAwIDU5NS4yNzU2IDg0MS44ODk4IF0gL1BhcmVudCA3IDAgUiAvUmVzb3VyY2VzIDw8Ci9Gb250IDEgMCBSIC9Qcm9jU2V0IFsgL1BERiAvVGV4dCAvSW1hZ2VCIC9JbWFnZUMgL0ltYWdlSSBdCj4+IC9Sb3RhdGUgMCAvVHJhbnMgPDwKCj4+IAogIC9UeXBlIC9QYWdlCj4+CmVuZG9iago1IDAgb2JqCjw8Ci9QYWdlTW9kZSAvVXNlTm9uZSAvUGFnZXMgNyAwIFIgL1R5cGUgL0NhdGFsb2cKPj4KZW5kb2JqCjYgMCBvYmoKPDwKL0F1dGhvciAoQ2xpZW50IFRvb2xzKSAvQ3JlYXRpb25EYXRlIChEOjIwMjYwNzI4MTIzNTQzKzAwJzAwJykgL0NyZWF0b3IgKFwodW5zcGVjaWZpZWRcKSkgL0tleXdvcmRzICgpIC9Nb2REYXRlIChEOjIwMjYwNzI4MTIzNTQzKzAwJzAwJykgL1Byb2R1Y2VyIChSZXBvcnRMYWIgUERGIExpYnJhcnkgLSBcKG9wZW5zb3VyY2VcKSkgCiAgL1N1YmplY3QgKFwodW5zcGVjaWZpZWRcKSkgL1RpdGxlIChNb250aGx5IEludm9pY2VkIENsaWVudHMgXDIwNCBTdGF0ZW1lbnQgTWFrZXIgXDIwNCBIb3cgVG8pIC9UcmFwcGVkIC9GYWxzZQo+PgplbmRvYmoKNyAwIG9iago8PAovQ291bnQgMSAvS2lkcyBbIDQgMCBSIF0gL1R5cGUgL1BhZ2VzCj4+CmVuZG9iago4IDAgb2JqCjw8Ci9GaWx0ZXIgWyAvQVNDSUk4NURlY29kZSAvRmxhdGVEZWNvZGUgXSAvTGVuZ3RoIDE3MjcKPj4Kc3RyZWFtCkdhdG07Z04oYjYmOk1sK0ZSXT9jMislJTFtOEctXEtgWV1yWjBZTlE3QnNrO0xubyQmLGBNYlBjXHNLQkxxTzpPVXVHTEZSRCwxVGg6JDUnTS1pbypjM3BBNTB0ZlFTYUtkNyRPUUBCNWBVRSY2SHVzXkdbNis/NkUuJEU7Xl5naShuZm8tbFdhVTNeQlkuZmJOb15CUkA4SCtBIUskK2VMcFZJW09CWHUmOXBWYjlmTGwvKGViY2haNUs0RDBTXDtlMjksbSduM3I9TSFITHB0ImFtNWk9SiMycS4xPzAkc0dGMmkvNlc1TmwkO0htc3EvMFU6cWI/PGxaKmgmYUEnNSpgPG0sa1hEcComXVMkUz5jalZdUiFnIjpGRSxvJXMiZ19pIUZPUERPMCVoaClObDpuVm9TKD82YERELG5qRGlSRkFVKi8lcSVGNSxTLUtUP1M4JiJGXCI4VFhyPGUpaD0pN0pjdGZRQEUjZSpuN2UmOTpFbDduQSI6X29rKmE7Yjc6JE01M2dKM2kvK19hc3NzRSk5RT9rPiZdJEVGLF5gOjoxUUxwO0JrP14vIUtsZnFnU0AqKDRtQFRuZGNEKGZfNipzZVdiPD5mMGg6OFxPXDM/XVw6XkZiKUNzZHFDb0FMW1VaRGxSVnMtb2I/N2M5KVowRlBdWCs/UGxcUkpzWnJJZExHTGJMOidYbmY4WkdHISRTZDwnKUM3LlhDJ1c3UEQhSD5CLztvMjFmRltkLC9Hc2E2TmlFPkIyKE5oMG49aW9sIzxpMTZySkp1TCFfLjhrOypra2AlLkFMJTthPTxaUGIjcV8hWiItRXVDRydNI2RCVCdsT29UPStrW1IzKSdyQS1nKDBSNS08YDJnc11MWC5qYW4qZDkhLWdnITNzJmUzI2YnOV0wKkw0YFAwSXBQYHNrQkpKV3MvK1EzMyNFNz1OYmU/TlNuMC0jImlyUFonVzdjWnRMKElCOD5XLURoXWxeUTdGS1IxZD1BNWtTUG5CcjNdSDpcbjg8OG5pb2FOVjZ1J21YXzVVNG9lPHREOipHOFRmR3FqM3NNc1JkL1oqXlRbTzdORUo0cTUlLU9zTzxqR0JPQyRXKzZUSUs/U25dO2twTidqN0ZdPG1oY0JyZjlTU3MyMHVLQmZIbDpiQz8xMGYoTXJBWypeJjRuPFZtTzJwN0I+dXUvdG8zPkVNZmYoN0A+ZkU4I2E5TmFYZVErKHI1azBEYCddRDMrYlw8XDErMVgsJkYxLEouaVQuQElJOFtCbkZyaEhXMWZLaGgpZUJZLCJJXEBYQlAqKk9ZRShRQGIpIVleKjJcYDhcXEJAJGgjbC5FV3FoPzpOMGFta01aLjAlIU9mIShUTWwhKjdCL3FgUXJmKmo9XjwyTEFYXG45TGBrUEYmZSY+Yz9LXD1yTj0kRWdSUV9dMT9CYE4hYE0hZGhIZixdYiYmPkJsNFJXaS9KVGhZaEc7IjoqWFBpIW9cVDNQWFwwM1wvQUg7cDFjVlg0MWhmK25mU3ArYiohRFU7RD0kNU5pNF5kZFdoWi86WSNfbW5yZ1JbNCQ/aUJlcEVYRDlcM1BQU0JaS2wpMF5bMDBEWlUtPi8sI1FFUUZsMlZpJjFiVEcpUyluVj5AXzpsUVk/M2tXY0FYMlM7NW1RKkhKdD5qSUctL2FGMm9KO1U6YiEzaVhDJyRMaHFUZiVDQ0g2TCE5dU8kUSs0MV4sazUhWk1yYy5bTkAnUTBuMz1ON1JCLmg2QkY0Q3VlJ185aCpYQFpCOXBmZk1OS2NgbjNWMU83dUBZcioyREQ8YSVVKSFTciIsKkFeL3BOMjklK101UnRXN2FsNSRtLGV1YWY3aU9pN04tXDMzYjYvJW5JbWJSQF5bMkBEUkVjZFRTbFxNSGhbIVckQS5zVGBFaEBLZCZrRW1uWEssWlEnQGFjVUsyODtuc1hgVTtvcTooZU5ibj9fLFtqS0FuW2xgZyVIQlowTD1UcUMialFPa0E4XUBLVGFuMUtDVFhMOyxuIiNGQHNjZTJYJDhqbioxTmFLQyhsQUNEayhnKldFYm8pJ1BhNzc6Xyk9SGtRXS03Tj07OyhrSUokVltIdD0lQVM1SycyQ2RlRjo3NnBbNWxsIWZXbWxrVmBkR1RVTSlSdXF0ODxUW21dbCI9YChvTDU7ZkxwVGZFWks6MWQzYV0xXzZeRjNoZ0FDUEhSbG9eIywuTVM6OjBrMiZlLlU5PS1pU1BzTmRFYTUkPGNEbj1yXE1IYz1tY09pb2NPVzc7MEhMKXNjbDw2KH4+ZW5kc3RyZWFtCmVuZG9iagp4cmVmCjAgOQowMDAwMDAwMDAwIDY1NTM1IGYgCjAwMDAwMDAwNjEgMDAwMDAgbiAKMDAwMDAwMDEwMiAwMDAwMCBuIAowMDAwMDAwMjA5IDAwMDAwIG4gCjAwMDAwMDAzMjEgMDAwMDAgbiAKMDAwMDAwMDUyNCAwMDAwMCBuIAowMDAwMDAwNTkyIDAwMDAwIG4gCjAwMDAwMDA5MTUgMDAwMDAgbiAKMDAwMDAwMDk3NCAwMDAwMCBuIAp0cmFpbGVyCjw8Ci9JRCAKWzwwZDAwM2IzNjFjNjBmZTQ0ZjFlYTJmYmE0YWY2NzU0Mj48MGQwMDNiMzYxYzYwZmU0NGYxZWEyZmJhNGFmNjc1NDI+XQolIFJlcG9ydExhYiBnZW5lcmF0ZWQgUERGIGRvY3VtZW50IC0tIGRpZ2VzdCAob3BlbnNvdXJjZSkKCi9JbmZvIDYgMCBSCi9Sb290IDUgMCBSCi9TaXplIDkKPj4Kc3RhcnR4cmVmCjI3OTIKJSVFT0YK</script>
 <script type="text/plain" id="guide-csv">JVBERi0xLjQKJZOMi54gUmVwb3J0TGFiIEdlbmVyYXRlZCBQREYgZG9jdW1lbnQgKG9wZW5zb3VyY2UpCjEgMCBvYmoKPDwKL0YxIDIgMCBSIC9GMiAzIDAgUgo+PgplbmRvYmoKMiAwIG9iago8PAovQmFzZUZvbnQgL0hlbHZldGljYSAvRW5jb2RpbmcgL1dpbkFuc2lFbmNvZGluZyAvTmFtZSAvRjEgL1N1YnR5cGUgL1R5cGUxIC9UeXBlIC9Gb250Cj4+CmVuZG9iagozIDAgb2JqCjw8Ci9CYXNlRm9udCAvSGVsdmV0aWNhLUJvbGQgL0VuY29kaW5nIC9XaW5BbnNpRW5jb2RpbmcgL05hbWUgL0YyIC9TdWJ0eXBlIC9UeXBlMSAvVHlwZSAvRm9udAo+PgplbmRvYmoKNCAwIG9iago8PAovQ29udGVudHMgOCAwIFIgL01lZGlhQm94IFsgMCAwIDU5NS4yNzU2IDg0MS44ODk4IF0gL1BhcmVudCA3IDAgUiAvUmVzb3VyY2VzIDw8Ci9Gb250IDEgMCBSIC9Qcm9jU2V0IFsgL1BERiAvVGV4dCAvSW1hZ2VCIC9JbWFnZUMgL0ltYWdlSSBdCj4+IC9Sb3RhdGUgMCAvVHJhbnMgPDwKCj4+IAogIC9UeXBlIC9QYWdlCj4+CmVuZG9iago1IDAgb2JqCjw8Ci9QYWdlTW9kZSAvVXNlTm9uZSAvUGFnZXMgNyAwIFIgL1R5cGUgL0NhdGFsb2cKPj4KZW5kb2JqCjYgMCBvYmoKPDwKL0F1dGhvciAoQ2xpZW50IFRvb2xzKSAvQ3JlYXRpb25EYXRlIChEOjIwMjYwNzI4MTIzNTQzKzAwJzAwJykgL0NyZWF0b3IgKFwodW5zcGVjaWZpZWRcKSkgL0tleXdvcmRzICgpIC9Nb2REYXRlIChEOjIwMjYwNzI4MTIzNTQzKzAwJzAwJykgL1Byb2R1Y2VyIChSZXBvcnRMYWIgUERGIExpYnJhcnkgLSBcKG9wZW5zb3VyY2VcKSkgCiAgL1N1YmplY3QgKFwodW5zcGVjaWZpZWRcKSkgL1RpdGxlIChQREYgdG8gQ1NWIENvbnZlcnRlciBcMjA0IEhvdyBUbykgL1RyYXBwZWQgL0ZhbHNlCj4+CmVuZG9iago3IDAgb2JqCjw8Ci9Db3VudCAxIC9LaWRzIFsgNCAwIFIgXSAvVHlwZSAvUGFnZXMKPj4KZW5kb2JqCjggMCBvYmoKPDwKL0ZpbHRlciBbIC9BU0NJSTg1RGVjb2RlIC9GbGF0ZURlY29kZSBdIC9MZW5ndGggMTYxNQo+PgpzdHJlYW0KR2F0bTs+QmVPVSY6WClPUik/Z1ppM15NcGgrckJqIlZxVEcibVRDZVRlRUZAMyEuaSwtK1AzIUlSaXJUMkteb2BUSyxfXz8wOl8mMmtwcmMoSSxpZWs3dGVVJSViM1w1V20rZzVRVzxgbG9pIyg6QDprSltrXlBxNU9wcG1VWSRgKFBpPVRrRmtlWkJdRSJKOy1bdENhWSI5ZmojJElJaDgyPWpFXEo4bEtKQEpYNEJCMV9raG5PU15SNmMiPXAmNWtJNFBdXG9lUnM4YDJoL05TR2tEY1YwOUE9UUFwaFBDTiUkcS5SbVBtZUVSPkk1ImdLIWUxclxpVm5aOScnQ1dfRWpmOlc7Oz9pTFN1VTp0ODwxTzdhVTA2WWRbITkvNy1gQVIpb1VAUlFuOFNwbXEmOzVsUkw1OkhpLSFWT1IrIWtHQ0lyTEBicGN1WGI+WC0yLSYkVTVKWWs4UzE5JEInbSphKC8mN2IubnBCUjhFdDwuYVkvZkI+MCRUISpDXGcsTm9aPzM+Jk9XMlNpPVhELEAhSCFTM1g4OWYtInEjWUw4PztkMlhGSmpHVCg6VVtNJDsrN0EuVFU+LSRKUkdhZjkhSWxpZidcRz1SMCNMNT42c2wncHEtc19dSWFkN2M3MW9LOjhAKyZWdSRMNWNFa01nVVpaMjs5Ki50bVtFLVdMLmkiWlRHRCg0QjxOVGsqYnI2VFByP15QPTplWl8wO1I1Qz85PShSMFdzXyE2YURSPlw6N3FVcmUsY01uIj1tQ182S0hAV0YqPnRlc1djRF1pSjdKPmxpT285P0QzT2U2SzcpOm8lN007P1xNdTFCaldhM0NWZmA4Qm1zaGFHUy81K1o8Uy5HJzBsYC4hZCNnXm48aT9WTSdOV1BYPVM3ZTVoSTwzLywkK3EsYWVQZytxMVNZXXQyRiRnRGtZclInM3NsYyxVMj90XyEkIihpKSskKlRWK0ZTVl9yXF04OTQ7bEgyTmNGNjszMz06Nlthcz9BS2xsVi9WOEJpOnJwVkxOZUkiZXFtPkUmIjc1W1oiOUJLIiNJLEorUDNjK1w+ci9dRy4vQUQncVptLkJDbVFLP0U7VzNvbmUhNStIXFQhTjhBbjA7PGNkQj8qJGkjJDhUMipbQkgjK2NsaT5aOywiVU8tSXVqZC9JJCkub0pwJThiQ1wtcnFrJHEqIT1rXDYzWT9jLW1RWT1mO2s4ciJEMEg4PEdeOVlMVDEsMVA0cm81YlNscmJmZFNzRFhnNTY5ITZfJjZtWClcPXFoU3FucD1GKjlJP3F0MVxXc1wtND9dREFsUlhUIy1GMTQ9cW8yImwkLmw2YDs6OismS1pldT1PI1pMNTVcSzhjT1pbdCtndU1Ca2dIIScxSDhtKS4hajJqNDNZZm5DK0E8YiVsUU1VKDFYdGUnaVpnSzc7WEg9LEhRPU5TWyxVPCMzcFU/YD5rWEdbOlxiO1ZlWms+XllqM25OaEpcY0VdOD9EcldyO14scjBCWy5WKC1bcVxqWSQ8ZWVvVUgiNEUqMUs+QmtAU00xUDkjOk1yU0JRP0ldXkpZLVwyNmBeJiJMIkJrMGFmZjZmNVtsPiFrVWhfIiJpajQ+VW5oZyQ3NW5qNDlpTilhLm9hTS9CTD4sKzBcbGFJaV5CbiYkLz5vY1EpbixeLEAnLDxCLmFKJEIvOGotdCUyMFpzbjZROjNDXnJRYnEwaikraVwkaShOdUglbVY+QC5AXUtfZVo9YWosUidHJ2taNUs4bkpRUUhwSTZcXFNgWzkmRj5sLENbbG4tazE+dGAlaVdnIyRoVi91MihjckFUY1ktaj5NN01uS0cpUHRrYiwtYGNJXD9raV4hZkdNJ1xXMDJJYV1ncjtVZnMsVCtRVSJYaVImIV9KcD9GaGxjNVMyZUhGNjZHVzErKXBnZEQ/SWQmVHE/OU9fc1Yzc0JaWjQrTnNAKiEnL0VBOkBHWi1ZNF87UDE/Pz1ic3Mpa084O0shaDBSZGxdQD9EJFxDQVNIXCg0PyMiSFdSKztfWzQzcj1bNE04QVl0R2J0Jlc8TCQ+VGtqckMnQ1dyXSI/MGsybXBMbjFBSylaVjxLc2dLOGBpKW5LaWZdO1otTWpAZUpmbXFFRVRrakJwQlpjXSV+PmVuZHN0cmVhbQplbmRvYmoKeHJlZgowIDkKMDAwMDAwMDAwMCA2NTUzNSBmIAowMDAwMDAwMDYxIDAwMDAwIG4gCjAwMDAwMDAxMDIgMDAwMDAgbiAKMDAwMDAwMDIwOSAwMDAwMCBuIAowMDAwMDAwMzIxIDAwMDAwIG4gCjAwMDAwMDA1MjQgMDAwMDAgbiAKMDAwMDAwMDU5MiAwMDAwMCBuIAowMDAwMDAwODkwIDAwMDAwIG4gCjAwMDAwMDA5NDkgMDAwMDAgbiAKdHJhaWxlcgo8PAovSUQgCls8ZmI5MDgxYzU5YjFhNTQ5NzgwYTVjZmNlNGM5ZWNkMDM+PGZiOTA4MWM1OWIxYTU0OTc4MGE1Y2ZjZTRjOWVjZDAzPl0KJSBSZXBvcnRMYWIgZ2VuZXJhdGVkIFBERiBkb2N1bWVudCAtLSBkaWdlc3QgKG9wZW5zb3VyY2UpCgovSW5mbyA2IDAgUgovUm9vdCA1IDAgUgovU2l6ZSA5Cj4+CnN0YXJ0eHJlZgoyNjU1CiUlRU9GCg==</script>
 <script type="text/plain" id="guide-guarantee">JVBERi0xLjQKJZOMi54gUmVwb3J0TGFiIEdlbmVyYXRlZCBQREYgZG9jdW1lbnQgKG9wZW5zb3VyY2UpCjEgMCBvYmoKPDwKL0YxIDIgMCBSIC9GMiAzIDAgUiAvRjMgNCAwIFIKPj4KZW5kb2JqCjIgMCBvYmoKPDwKL0Jhc2VGb250IC9IZWx2ZXRpY2EgL0VuY29kaW5nIC9XaW5BbnNpRW5jb2RpbmcgL05hbWUgL0YxIC9TdWJ0eXBlIC9UeXBlMSAvVHlwZSAvRm9udAo+PgplbmRvYmoKMyAwIG9iago8PAovQmFzZUZvbnQgL0hlbHZldGljYS1Cb2xkIC9FbmNvZGluZyAvV2luQW5zaUVuY29kaW5nIC9OYW1lIC9GMiAvU3VidHlwZSAvVHlwZTEgL1R5cGUgL0ZvbnQKPj4KZW5kb2JqCjQgMCBvYmoKPDwKL0Jhc2VGb250IC9aYXBmRGluZ2JhdHMgL05hbWUgL0YzIC9TdWJ0eXBlIC9UeXBlMSAvVHlwZSAvRm9udAo+PgplbmRvYmoKNSAwIG9iago8PAovQ29udGVudHMgOSAwIFIgL01lZGlhQm94IFsgMCAwIDU5NS4yNzU2IDg0MS44ODk4IF0gL1BhcmVudCA4IDAgUiAvUmVzb3VyY2VzIDw8Ci9Gb250IDEgMCBSIC9Qcm9jU2V0IFsgL1BERiAvVGV4dCAvSW1hZ2VCIC9JbWFnZUMgL0ltYWdlSSBdCj4+IC9Sb3RhdGUgMCAvVHJhbnMgPDwKCj4+IAogIC9UeXBlIC9QYWdlCj4+CmVuZG9iago2IDAgb2JqCjw8Ci9QYWdlTW9kZSAvVXNlTm9uZSAvUGFnZXMgOCAwIFIgL1R5cGUgL0NhdGFsb2cKPj4KZW5kb2JqCjcgMCBvYmoKPDwKL0F1dGhvciAoQ2xpZW50IFRvb2xzKSAvQ3JlYXRpb25EYXRlIChEOjIwMjYwNzI4MTIzNTQzKzAwJzAwJykgL0NyZWF0b3IgKFwodW5zcGVjaWZpZWRcKSkgL0tleXdvcmRzICgpIC9Nb2REYXRlIChEOjIwMjYwNzI4MTIzNTQzKzAwJzAwJykgL1Byb2R1Y2VyIChSZXBvcnRMYWIgUERGIExpYnJhcnkgLSBcKG9wZW5zb3VyY2VcKSkgCiAgL1N1YmplY3QgKFwodW5zcGVjaWZpZWRcKSkgL1RpdGxlIChHdWFyYW50ZWUgR2VuZXJhdG9yIFwyMDQgSG93IFRvKSAvVHJhcHBlZCAvRmFsc2UKPj4KZW5kb2JqCjggMCBvYmoKPDwKL0NvdW50IDEgL0tpZHMgWyA1IDAgUiBdIC9UeXBlIC9QYWdlcwo+PgplbmRvYmoKOSAwIG9iago8PAovRmlsdGVyIFsgL0FTQ0lJODVEZWNvZGUgL0ZsYXRlRGVjb2RlIF0gL0xlbmd0aCAxODQ1Cj4+CnN0cmVhbQpHYXVIS2hjJjhoJjpXZkdmXWc6MkZGbjknXCpwRihLcW0rMkJsVSUoXUVoXmJWTilCOlxbZ0wmSWsvV2FTPEAtZUpONUlnRCNOIzpcKTJZOFY7VTxmZ0AmSk9uNCp0LGNSRFs0bmVvZjlLVExcOnBcRTRTJmFhMk0uMSdKQExFb1YjYy9LLnVpQCs1ajIiYTNZQDZmR2ohMV03bUlLSyouI2UtVV4oIzQiYSg0O2RIW0dbUFEtYDglPmhnYGNsczg7XVEyO0l1Om1hJzU6bklbQ2Y/KFNfb0xBVytgMm9eaDFwdD1VdTVmXiQoMDIiSE1LdVJRXGBIdG5cSDw1S0A9UHBaMGQ1JmZeYnJLJXVMLmVDdDREYG5OODJmK3VgLm8pUXE2MVsiWTg5XWdoLXBDblBgZEZdKGQrYlVISSlTMThrOGFoa0ZyOl42XDUjPU9RITkyOmpYSS44JlRYTW8wOzRUZ0kjOj07NzZYMF51MmVAZUBdTlVJJzh1Olg7J0chISMvXSdDL3UnQ28tcG5FTWolOkRmPVpkKSdGUy9sTVc3QzBuW29wQ2FqbycpWFFFZFlUM1Q2Mi1ybypTUy9hcFBWV2knSlNyLWs7XGtoPUdOMU89X0lHUFZfPCJRVlM6WyIrPE5MOyY+RCElR0djM0F0TCxiY0ZiS1ZoPW9pSkB1YEs7YTkuNkY7R2REaW1OL1tCWz9XTyVBXU0uWGxwQGE6WzwoR15DS0pjPVdEPVJSYFJRIVZqKykiWTBocjpIKypJTlBZSlJcNkhPYT9pbURZVHBRNF0zOVdBV1pXMTBbXDl0RSU3PzBWc1lMRix1K2woNUNBUyE9JDtIJ000Vi0uKGtrdCM1Nk4tbz9uYEBbR0VeI1o3b15EXyJCSm04J1tMPEtldDBMOUwwTjRVR2IiJXAnTEFzTzs+YD5fMUBvYjlCcixPZkZhLDRGSEtyTipMUWJCIT1BMF4jL2VIajhiSWVvQXUiXnEkXzxMUm0xOjJWW2Y9OztjUUFPW1VVZmYlW2A7bltlVz1oUk5WUEQsUWNzK1clMWskRSdWOG9HVC8mUUZbXDxYKUYjckUkXmAkNyozXkNAX25PY2otTGVnaVpjIWUral5NUzZKRSNDNS1tWSUhbGY2UCUjayhqJUx0Y2VaRWIjI0UlZilrI1VvOHVFcFxnZDY8NGpZNnVRZiQ7U1JXbjsmQ2ZITz11MmMtXm0lajdXcitmbHUtNEVcaUkyUVI+aWhnVDshZXBJLSVbXlRHNWI+P3QrP2RWTFVqX00nakE3JmhjLC1BLUoxP1I1cS8qLUZecjA+SThvQFUrY2BvL0o9cCknV2NTXmlLZFxmUikxdW5LMVlDX2pnVTxaS0UkTlwvUD03QC42bys3UURaZ3NCVG0nPGY6ciVrb0xDRURELzhoNzBaJTdhXUVIKyEhSkpMKipkLllfRFxfOzpWcUAnUV87blFIZi9vNXJbYWM6YWdAMmshTywuUT5tXlVcRytlNV4oT1RPLSVWNUZONjpvS1A1WE9HYXQ7S0pARWxaVCxmXl1tKFEiQTE8N2U3Ym8lOkIzRCM6KGNyWTRbK089UDQkNl9JayZUUlczTmNeMU0oT1smSnAjWGw4NzdYXDFmLDA1ZF03LSlyRSxZJ2plaTBVNlRbSjsra19yPmZzKG8tYEhVR21oNVszP19pOSJMQ2IhNmtIT2UvK01aSyRDQT5fSzBcay0kViNzNTZAZ1xVRjRpOyxTI1Y6dU9HWk0kIz4hWFRCI11AMVpFU18qX1EtREo1PlgxPVIuW1pIRldyUVMyWy5YaUNwOG8zSWZZK2VDNkJoT2lKOF01WUdONC0xLThgaV1iayRCcmguOGcvWV1nQEhwZTohPSItV19WQ0U2MG8nOnNGQUFoMWsyUD4uQ09lXHREP0phRWA9QjAucGdcaUJEMylGO2BlYVJnRCdDN3QyNDVLOT42YFxqcmNDKHBlLGg7RF0ibGBQRWVULFg0RWgkXmw0bmY6ZSVQXi1JUFRXQkNsMV90V0NrY05RSkpuWTxpTUFALT1RV1BZUF8hW1QjVTcpZjkhPzgvQlssVWBlV2dVS01wKG8wVktlUz9EbGAwU1UmK0ljZVtcSGlSbidvQUs/QFxxRV9MWGY0QVFBOmstU3BNcioxKSZfciMvazQ8PiYpXlkjaTFqPUZxc0VIRy9fO0xrJFQ6cFxvdUU4PGtTKlAnNjUrUlxcU3VSWjwvMjttUkFaW0ZmSEA0SVUvI2tZcT9aRHNPZWlSUS1iQUEidF0oWkdJXipxIVJbKktVXSchcVVUdW1SSnAtI203NWlDcXM+a0InPmEsQC9bXWo4ZE9iKWllJ1VbN0FpZmhBLF9qUXIuaklkKiZJWiJsZUI7KSZDbk9hM0ZjaCstRD5zZiNgbUlbLVFPTFg0TjFhLihxR2c+TGtUQERPSSY2fj5lbmRzdHJlYW0KZW5kb2JqCnhyZWYKMCAxMAowMDAwMDAwMDAwIDY1NTM1IGYgCjAwMDAwMDAwNjEgMDAwMDAgbiAKMDAwMDAwMDExMiAwMDAwMCBuIAowMDAwMDAwMjE5IDAwMDAwIG4gCjAwMDAwMDAzMzEgMDAwMDAgbiAKMDAwMDAwMDQxNCAwMDAwMCBuIAowMDAwMDAwNjE3IDAwMDAwIG4gCjAwMDAwMDA2ODUgMDAwMDAgbiAKMDAwMDAwMDk4MiAwMDAwMCBuIAowMDAwMDAxMDQxIDAwMDAwIG4gCnRyYWlsZXIKPDwKL0lEIApbPDRkZTYyYmI1YmY5NWE2ZDQyMzJkNDdhYzE3NzQ2YWQyPjw0ZGU2MmJiNWJmOTVhNmQ0MjMyZDQ3YWMxNzc0NmFkMj5dCiUgUmVwb3J0TGFiIGdlbmVyYXRlZCBQREYgZG9jdW1lbnQgLS0gZGlnZXN0IChvcGVuc291cmNlKQoKL0luZm8gNyAwIFIKL1Jvb3QgNiAwIFIKL1NpemUgMTAKPj4Kc3RhcnR4cmVmCjI5NzcKJSVFT0YK</script>
@@ -13790,10 +14284,11 @@ loadSubs();
     <p>Outstanding supplier bills and the payments raised against them — synced to Supabase, so a payment you raise here shows up straight away, and stays there until it's marked paid, no matter who's looking or when.</p>
   </header>
 
-  <p>The tool has two pages, switched with the buttons at the top:</p>
+  <p>The tool has three pages, switched with the buttons at the top:</p>
   <div class="tab-list">
     <span>Who Do We Owe</span>
     <span>Payments Raised</span>
+    <span>Not Paying</span>
   </div>
 
   <h2>1. Who Do We Owe</h2>
@@ -13826,7 +14321,25 @@ loadSubs();
     <li>Use the date range and search box to narrow the list down; <span class="tag">↻ Refresh</span> re-pulls the latest data if it's been open a while.</li>
   </ol>
 
-  <h2>4. Importing historical paid bills</h2>
+  <h2>4. Not Paying (parked invoices)</h2>
+  <p>For aged invoices the Directors don't want to pay for the moment.</p>
+  <ol>
+    <li>In Who Do We Owe, expand a supplier and tick the invoices, then click <span class="tag">Move to Not Paying</span> (next to Create Payment).</li>
+    <li>Those invoices show a purple <span class="tag">Not Paying</span> badge, and drop out of Total Owed, Overdue and the due-date tabs — same as a raised payment.</li>
+    <li>Open the <span class="tag">Not Paying</span> page to see everything parked, grouped by supplier, with totals. Tick a supplier's box to select all its invoices, or tick individual invoices.</li>
+    <li><span class="tag">Raise Payment</span> turns the selected invoices into a normal payment (they appear in Payments Raised as Unpaid and leave Not Paying).</li>
+    <li><span class="tag">Return to Who Do We Owe</span> takes them off the list and counts them as outstanding again.</li>
+  </ol>
+
+  <div class="note">
+    <strong>It remembers.</strong> Parked invoices are saved in the shared database, matched by supplier and invoice number. Next time you load a new Bills report, anything parked is automatically kept out of the owed totals. If a parked invoice is no longer in the report you've loaded (for example it was paid in Xero), it's flagged <em>Not in loaded report</em> so you can clear it.
+  </div>
+
+  <div class="warn">
+    <strong>One-off set-up:</strong> the Not Paying tab needs a table in Supabase called <code>wdwo_not_paying</code>. Run the SQL supplied with this update once, in the Supabase SQL Editor — until then the tab will show a "Could not load" message.
+  </div>
+
+  <h2>5. Importing historical paid bills</h2>
   <p>Open the <strong>"Import historical Paid Bills"</strong> section at the bottom of Payments Raised. Upload a Xero Paid Bills export and each bill imports as its own already-paid payment — a one-time way to bring your existing backlog into the system without needing to raise each one by hand.</p>
 
   <div class="warn">
@@ -14030,6 +14543,11 @@ let sortKey = 'amount';
 let sortDir = -1;
 let currentTab = null; // e.g. 'T', 'SI', 'REVIEW'
 let exemptList = []; // account numbers hidden from every tab entirely
+let nsItems = [];            // held clients: [{key, company, acct, reason, createdAt}]
+let nsIndex = new Map();     // key -> item
+let nsSelected = new Set();  // keys ticked on screen
+let nsVisibleKeys = [];      // keys of rows currently shown (for "select all")
+let nsLoadError = '';
 
 async function loadExempt(){
   try{
@@ -14159,6 +14677,7 @@ function orderedTabKeys(buckets){
 
 function tabLabel(key){
   if (key === 'REVIEW') return '⚠ Needs Review';
+  if (key === 'HOLD') return '⏸ Not Sending Statements';
   return key + '-';
 }
 
@@ -14640,6 +15159,7 @@ function getFiltered(){
 
   return allClients.filter(c => {
     if (isExempt(c.acct)) return false;
+    if (nsIsHeld(c)) return false;
     const total = round2(c.total);
     if (total <= 0) return false;
     if (q && !c.name.toLowerCase().includes(q)) return false;
@@ -14651,72 +15171,255 @@ function getFiltered(){
   });
 }
 
+/* ---------- Not Sending Statements (Supabase-backed: table wns_statement_hold) ---------- */
+// Clients with an ongoing issue (disputes, payment plans, etc.) can be parked
+// here so they stop appearing in the weekly list. The list is saved in the
+// shared database, so it is remembered every time a new report is loaded.
+const NS_SUPABASE_URL = 'https://xwkmwazkmovnonbocpom.supabase.co';
+const NS_SUPABASE_KEY = 'sb_publishable_7DxxdwH6NcOqpj6OhKZXAg_5HaJlrWQ';
+const nsDb = (window.supabase && window.supabase.createClient) ? window.supabase.createClient(NS_SUPABASE_URL, NS_SUPABASE_KEY) : null;
+
+
+// Account number is the preferred key; clients with no account number
+// (the "Needs Review" ones) fall back to their company name.
+function nsKey(acct, name){
+  const a = (acct || '').trim().toLowerCase();
+  return a ? 'a:' + a : 'n:' + (name || '').trim().toLowerCase();
+}
+function nsIsHeld(c){ return nsIndex.has(nsKey(c.acct, c.name)); }
+
+async function nsLoad(){
+  if (!nsDb){
+    nsLoadError = 'Could not load the Not Sending Statements list — the database library did not load. Check your internet connection and refresh the page.';
+    render();
+    return false;
+  }
+  try{
+    const { data, error } = await nsDb
+      .from('wns_statement_hold')
+      .select('match_key, created_at, account_number, company, reason')
+      .order('company', { ascending: true });
+    if (error) throw error;
+    nsItems = (data || []).map(r => ({
+      key: r.match_key,
+      company: r.company || '',
+      acct: r.account_number || '',
+      reason: r.reason || '',
+      createdAt: r.created_at ? new Date(r.created_at) : null
+    }));
+    nsIndex = new Map();
+    nsItems.forEach(it => nsIndex.set(it.key, it));
+    nsLoadError = '';
+    render();
+    return true;
+  } catch(err){
+    console.error('Could not load Not Sending Statements list', err);
+    nsLoadError = 'Could not load the Not Sending Statements list — ' + (err && err.message ? err.message : 'unknown error') + '. Check the wns_statement_hold table exists in Supabase (see the How To guide).';
+    render();
+    return false;
+  }
+}
+
+// Rows for a given tab, in one common shape.
+function nsTabRows(filtered, tab){
+  if (tab === 'HOLD'){
+    const q = document.getElementById('searchBox').value.trim().toLowerCase();
+    const byKey = new Map();
+    allClients.forEach(c => byKey.set(nsKey(c.acct, c.name), c));
+    return nsItems
+      .filter(it => !q || it.company.toLowerCase().includes(q))
+      .map(it => {
+        const c = byKey.get(it.key);
+        return {
+          key: it.key, name: it.company, acct: it.acct,
+          total: c ? c.total : null,
+          invoiceCount: c ? (c.invoiceCount || 0) : 0,
+          overdue: c ? round2(c.overdue) > 0.004 : false,
+          inReport: !!c,
+          reason: it.reason
+        };
+      });
+  }
+  const buckets = buildBuckets(filtered);
+  return (buckets[tab] || []).map(c => ({
+    key: nsKey(c.acct, c.name), name: c.name, acct: c.acct,
+    total: c.total, invoiceCount: c.invoiceCount || 0,
+    overdue: round2(c.overdue) > 0.004, inReport: true, reason: ''
+  }));
+}
+
+function nsStatusText(r){
+  if (!r.inReport) return 'Not in report';
+  return r.overdue ? 'Overdue' : 'Current Month';
+}
+function nsStatusBadge(r){
+  if (!r.inReport) return '<span class="badge current">Not in report</span>';
+  return `<span class="badge ${r.overdue ? 'overdue' : 'current'}">${r.overdue ? 'Overdue' : 'Current Month'}</span>`;
+}
+function nsFmt(r){ return r.total == null ? '—' : fmt(round2(r.total)); }
+
 function render(){
   const filtered = getFiltered();
   const hasData = allClients.length > 0;
+  const showPanel = hasData || nsItems.length > 0;
 
-  document.getElementById('emptyState').style.display = hasData ? 'none' : 'block';
+  document.getElementById('emptyState').style.display = showPanel ? 'none' : 'block';
   document.getElementById('statRow').style.display = hasData ? 'flex' : 'none';
-  document.getElementById('resultsPanel').style.display = hasData ? 'block' : 'none';
+  document.getElementById('resultsPanel').style.display = showPanel ? 'block' : 'none';
 
-  if (!hasData) return;
+  const nsErr = document.getElementById('nsErrorBox');
+  nsErr.textContent = nsLoadError;
+  nsErr.style.display = nsLoadError ? 'block' : 'none';
+
+  if (!showPanel) return;
 
   const buckets = buildBuckets(filtered);
   const keys = orderedTabKeys(buckets);
+  keys.push('HOLD');
 
-  // Keep the current tab selected if it still has content; otherwise pick the first.
+  // Keep the current tab selected if it still exists; otherwise pick the first.
   if (!currentTab || !keys.includes(currentTab)){
     currentTab = keys[0] || null;
   }
 
-  // Render tab bar
   const tabBar = document.getElementById('tabBar');
   tabBar.innerHTML = '';
   keys.forEach(key => {
     const btn = document.createElement('button');
-    btn.className = 'tab-btn' + (key === 'REVIEW' ? ' review' : '') + (key === currentTab ? ' active' : '');
-    btn.innerHTML = `${tabLabel(key)}<span class="count">${buckets[key].length}</span>`;
-    btn.addEventListener('click', () => { currentTab = key; render(); });
+    const count = key === 'HOLD' ? nsItems.length : buckets[key].length;
+    btn.className = 'tab-btn' + (key === 'REVIEW' ? ' review' : '') + (key === 'HOLD' ? ' hold' : '') + (key === currentTab ? ' active' : '');
+    btn.innerHTML = `${tabLabel(key)}<span class="count">${count}</span>`;
+    btn.addEventListener('click', () => { currentTab = key; nsSelected.clear(); render(); });
     tabBar.appendChild(btn);
   });
 
-  const activeList = currentTab ? (buckets[currentTab] || []) : [];
+  const isHold = currentTab === 'HOLD';
+  const activeList = currentTab ? nsTabRows(filtered, currentTab) : [];
 
   activeList.sort((a,b) => {
     let av, bv;
     if (sortKey === 'name'){ av = a.name.toLowerCase(); bv = b.name.toLowerCase(); }
     else if (sortKey === 'acct'){ av = a.acct || ''; bv = b.acct || ''; }
-    else { av = a.total; bv = b.total; }
+    else { av = a.total == null ? -Infinity : a.total; bv = b.total == null ? -Infinity : b.total; }
     if (av < bv) return -1 * sortDir;
     if (av > bv) return 1 * sortDir;
     return 0;
   });
 
-  // Overall stats reflect everything across all tabs (the full statement run)
+  // Overall stats reflect everything still on the statement run (held clients are excluded)
   const totalOwed = filtered.reduce((s,c) => s + c.total, 0);
   document.getElementById('statCount').textContent = filtered.length;
   document.getElementById('statTotal').textContent = fmt(round2(totalOwed));
+  document.getElementById('nsStatHold').textContent = nsItems.length;
 
-  const tabTotal = activeList.reduce((s,c) => s + c.total, 0);
-  const label = currentTab === 'REVIEW'
-    ? activeList.length + ' account' + (activeList.length===1?'':'s') + ' need an account number assigned before statements can be sent — ' + fmt(round2(tabTotal)) + ' owed'
-    : activeList.length + ' client' + (activeList.length===1?'':'s') + ' on ' + tabLabel(currentTab) + ' — ' + fmt(round2(tabTotal)) + ' owed';
-  document.getElementById('resultsLabel').textContent = currentTab ? label : 'No clients match this filter';
+  const tabTotal = activeList.reduce((s,c) => s + (c.total || 0), 0);
+  let label;
+  if (!currentTab) label = 'No clients match this filter';
+  else if (isHold) label = activeList.length + ' client' + (activeList.length===1?'':'s') + ' on hold — statements are NOT being sent' + (hasData ? ' — ' + fmt(round2(tabTotal)) + ' owed in the loaded report' : '');
+  else if (currentTab === 'REVIEW') label = activeList.length + ' account' + (activeList.length===1?'':'s') + ' need an account number assigned before statements can be sent — ' + fmt(round2(tabTotal)) + ' owed';
+  else label = activeList.length + ' client' + (activeList.length===1?'':'s') + ' on ' + tabLabel(currentTab) + ' — ' + fmt(round2(tabTotal)) + ' owed';
+  document.getElementById('resultsLabel').textContent = label;
+
+  document.getElementById('nsReasonTh').style.display = isHold ? '' : 'none';
+
+  // Drop any selections that are no longer on screen
+  nsVisibleKeys = activeList.map(r => r.key);
+  Array.from(nsSelected).forEach(k => { if (!nsVisibleKeys.includes(k)) nsSelected.delete(k); });
 
   const body = document.getElementById('resultsBody');
   body.innerHTML = '';
   activeList.forEach(c => {
     const tr = document.createElement('tr');
-    const isOverdue = round2(c.overdue) > 0.004;
     tr.innerHTML = `
+      <td style="width:34px;"><input type="checkbox" class="ns-cb" ${nsSelected.has(c.key) ? 'checked' : ''}></td>
       <td>${escapeHtml(c.name)}</td>
       <td class="acct">${escapeHtml(c.acct || '—')}</td>
-      <td class="amount">${fmt(round2(c.total))}</td>
-      <td style="text-align:center;">${c.invoiceCount || 0}</td>
-      <td><span class="badge ${isOverdue ? 'overdue' : 'current'}">${isOverdue ? 'Overdue' : 'Current Month'}</span></td>
+      <td class="amount">${nsFmt(c)}</td>
+      <td style="text-align:center;">${c.inReport ? c.invoiceCount : '—'}</td>
+      <td>${nsStatusBadge(c)}</td>
+      ${isHold ? `<td class="ns-reason" title="Click to edit the note">${c.reason ? escapeHtml(c.reason) : '<em>Click to add a note</em>'}</td>` : ''}
     `;
+    tr.querySelector('.ns-cb').addEventListener('change', e => {
+      if (e.target.checked) nsSelected.add(c.key); else nsSelected.delete(c.key);
+      nsRenderBulk();
+    });
+    const rc = tr.querySelector('.ns-reason');
+    if (rc) rc.addEventListener('click', () => nsEditReason(c));
     body.appendChild(tr);
   });
+
+  nsRenderBulk();
+}
+
+function nsRenderBulk(){
+  const isHold = currentTab === 'HOLD';
+  const bar = document.getElementById('nsBulkBar');
+  const n = nsSelected.size;
+  bar.style.display = n ? 'flex' : 'none';
+  document.getElementById('nsBulkInfo').textContent = n + ' selected';
+  document.getElementById('nsHoldBtn').style.display = isHold ? 'none' : '';
+  document.getElementById('nsReleaseBtn').style.display = isHold ? '' : 'none';
+  const all = document.getElementById('nsSelectAll');
+  all.checked = nsVisibleKeys.length > 0 && nsVisibleKeys.every(k => nsSelected.has(k));
+}
+
+function nsSelectedRows(){
+  const rows = nsTabRows(getFiltered(), currentTab);
+  return rows.filter(r => nsSelected.has(r.key));
+}
+
+document.getElementById('nsSelectAll').addEventListener('change', e => {
+  if (e.target.checked) nsVisibleKeys.forEach(k => nsSelected.add(k)); else nsVisibleKeys.forEach(k => nsSelected.delete(k));
+  render();
+});
+document.getElementById('nsClearBtn').addEventListener('click', () => { nsSelected.clear(); render(); });
+
+document.getElementById('nsHoldBtn').addEventListener('click', async () => {
+  const rows = nsSelectedRows();
+  if (!rows.length) return;
+  if (!nsDb){ alert('The database is not available — refresh the page and try again.'); return; }
+  const reason = prompt('Stop sending statements to ' + rows.length + ' client' + (rows.length===1?'':'s') + '.\n\nAdd a short note (optional) — e.g. "Dispute — chasing separately":', '');
+  if (reason === null) return;
+  try{
+    const payload = rows.map(r => ({
+      match_key: r.key,
+      account_number: r.acct || null,
+      company: r.name,
+      reason: reason.trim() || null
+    }));
+    const { error } = await nsDb.from('wns_statement_hold').upsert(payload, { onConflict: 'match_key' });
+    if (error) throw error;
+    nsSelected.clear();
+    await nsLoad();
+  } catch(err){
+    alert('Could not move those clients to Not Sending Statements — ' + (err && err.message ? err.message : 'unknown error') + '. Nothing was changed.');
+  }
+});
+
+document.getElementById('nsReleaseBtn').addEventListener('click', async () => {
+  const keys = Array.from(nsSelected);
+  if (!keys.length) return;
+  if (!confirm('Release ' + keys.length + ' client' + (keys.length===1?'':'s') + '? They will appear in the weekly statement list again.')) return;
+  try{
+    const { error } = await nsDb.from('wns_statement_hold').delete().in('match_key', keys);
+    if (error) throw error;
+    nsSelected.clear();
+    await nsLoad();
+  } catch(err){
+    alert('Could not release those clients — ' + (err && err.message ? err.message : 'unknown error') + '. Nothing was changed.');
+  }
+});
+
+async function nsEditReason(r){
+  const val = prompt('Note for ' + r.name + ':', r.reason || '');
+  if (val === null) return;
+  try{
+    const { error } = await nsDb.from('wns_statement_hold').update({ reason: val.trim() || null }).eq('match_key', r.key);
+    if (error) throw error;
+    await nsLoad();
+  } catch(err){
+    alert('Could not save that note — ' + (err && err.message ? err.message : 'unknown error') + '.');
+  }
 }
 
 function escapeHtml(s){
@@ -14724,51 +15427,49 @@ function escapeHtml(s){
 }
 
 function exportCSV(){
-  const filtered = getFiltered();
-  const buckets = buildBuckets(filtered);
-  const activeList = currentTab ? (buckets[currentTab] || []) : [];
-
-  let csv = 'Company Name,Account Number,Amount Owed,Invoices,Status\n';
+  const activeList = currentTab ? nsTabRows(getFiltered(), currentTab) : [];
+  const isHold = currentTab === 'HOLD';
+  let csv = 'Company Name,Account Number,Amount Owed,Invoices,Status' + (isHold ? ',Note' : '') + '\n';
   activeList.forEach(c => {
-    const isOverdue = round2(c.overdue) > 0.004;
-    csv += `"${c.name.replace(/"/g,'""')}","${c.acct}",${round2(c.total).toFixed(2)},${c.invoiceCount || 0},${isOverdue ? 'Overdue' : 'Current Month'}\n`;
+    csv += `"${c.name.replace(/"/g,'""')}","${(c.acct || '').replace(/"/g,'""')}",${c.total == null ? '' : round2(c.total).toFixed(2)},${c.inReport ? c.invoiceCount : ''},${nsStatusText(c)}` +
+           (isHold ? `,"${(c.reason || '').replace(/"/g,'""')}"` : '') + '\n';
   });
   const blob = new Blob([csv], {type:'text/csv'});
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  const tabName = currentTab === 'REVIEW' ? 'needs-review' : (currentTab || 'all').toLowerCase();
+  const tabName = currentTab === 'REVIEW' ? 'needs-review' : currentTab === 'HOLD' ? 'not-sending' : (currentTab || 'all').toLowerCase();
   a.download = 'statement-run-' + tabName + '.csv';
   a.click();
   URL.revokeObjectURL(url);
 }
 
 // Builds a landscape, one-page-wide printable sheet for the currently open tab,
-// with a blank Notes column for filing/tracking, then triggers the browser print dialog.
+// with a Notes column for filing/tracking, then triggers the browser print dialog.
 function printCurrentTab(){
-  if (!currentTab || !allClients.length) return;
+  if (!currentTab) return;
+  const isHold = currentTab === 'HOLD';
+  if (!isHold && !allClients.length) return;
 
-  const filtered = getFiltered();
-  const buckets = buildBuckets(filtered);
-  const activeList = (buckets[currentTab] || []).slice().sort((a, b) => b.total - a.total);
+  const activeList = nsTabRows(getFiltered(), currentTab).sort((a, b) => (b.total || 0) - (a.total || 0));
 
   const brandHtml = document.querySelector('.brand').outerHTML;
   const tabLabelText = currentTab === 'REVIEW'
     ? 'Needs Review — Account Numbers Required'
+    : isHold ? 'Not Sending Statements — Held Clients'
     : (tabLabel(currentTab) + ' Accounts');
   const asOfText = document.getElementById('asof').textContent || '';
   const printedOn = new Date().toLocaleDateString('en-GB');
 
   let rows = '';
   activeList.forEach(c => {
-    const isOverdue = round2(c.overdue) > 0.004;
     rows += `<tr>
       <td>${escapeHtml(c.name)}</td>
       <td class="p-acct">${escapeHtml(c.acct || '—')}</td>
-      <td class="p-amount">${fmt(round2(c.total))}</td>
-      <td class="p-invoices">${c.invoiceCount || 0}</td>
-      <td class="p-status">${isOverdue ? 'Overdue' : 'Current Month'}</td>
-      <td class="p-notes"></td>
+      <td class="p-amount">${nsFmt(c)}</td>
+      <td class="p-invoices">${c.inReport ? c.invoiceCount : '—'}</td>
+      <td class="p-status">${nsStatusText(c)}</td>
+      <td class="p-notes">${isHold ? escapeHtml(c.reason || '') : ''}</td>
     </tr>`;
   });
 
@@ -14798,6 +15499,8 @@ function printCurrentTab(){
 
   window.print();
 }
+
+nsLoad();
 
 
 </script>
